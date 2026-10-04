@@ -1,0 +1,74 @@
+{
+  "name": "@toolchainjp/mf-invoice-mcp-server",
+  "version": "0.1.0",
+  "description": "マネーフォワード クラウド請求書 API v3 を MCP ツールとして公開する MCP サーバー",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "moneyforward",
+    "invoice",
+    "マネーフォワード",
+    "請求書"
+  ],
+  "license": "UNLICENSED",
+  "author": "Toolchain (https://toolchain.jp)",
+  "homepage": "https://github.com/toolchainjp/mf-invoice-mcp-server#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/toolchainjp/mf-invoice-mcp-server.git"
+  },
+  "bugs": {
+    "url": "https://github.com/toolchainjp/mf-invoice-mcp-server/issues"
+  },
+  "type": "module",
+  "bin": {
+    "mf-invoice-mcp-server": "dist/index.js"
+  },
+  "files": [
+    "dist",
+    "!dist/**/*.map"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "engines": {
+    "node": ">=22.12"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "start": "node dist/index.js",
+    "generate": "tsx scripts/generate-operations.ts && prettier --write --log-level warn docs/tools.md",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "vitest run --config vitest.config.ts",
+    "test:watch": "vitest --config vitest.config.ts",
+    "test:e2e": "npm run build && vitest run --config vitest.e2e.config.ts",
+    "test:e2e:live": "npm run build && vitest run --config vitest.live.config.ts",
+    "test:all": "npm test && npm run test:e2e",
+    "check": "npm run format:check && npm run lint && npm run typecheck && npm run test:all",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.0",
+    "ajv": "^8.20.0",
+    "ajv-formats": "^3.0.1"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^24.19.1",
+    "eslint": "^10.12.0",
+    "globals": "^17.13.0",
+    "prettier": "^3.9.9",
+    "tsx": "^4.23.15",
+    "typescript": "~6.0.0",
+    "typescript-eslint": "^8.71.0",
+    "vitest": "^5.0.3",
+    "yaml": "^2.9.1"
+  },
+  "allowScripts": {
+    "esbuild@0.28.2": true
+  }
+}

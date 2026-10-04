@@ -1,0 +1,21 @@
+# 生成物・依存
+dist/
+node_modules/
+coverage/
+package-lock.json
+src/generated/
+
+# 仕様書（提供元のまま保持する）
+document.yaml
+
+# テンプレート (toolchainjp/template) 由来のファイルは整形しない
+.claude/
+.github/
+.mcp.json
+.coderabbit.yaml.example
+CLAUDE.md
+docs/agent-harness/
+evals/
+scripts/*/
+scripts/*.sh
+tests/harness/
