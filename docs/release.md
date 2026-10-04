@@ -24,7 +24,7 @@ flowchart LR
 | main 上のコミットか   | タグのコミットが `main` に含まれていなければ失敗（`development` や作業ブランチから誤って発行しない）   |
 | 未発行か              | 同じ版が npm にあれば失敗                                                                              |
 | 検証                  | `npm ci` → `npm run check`（format / lint / typecheck / ユニット / E2E）。外部 API には接続しない      |
-| 同梱物の確認          | `npm pack --dry-run` の結果をログに出す（`dist/` と `README.md`、`package.json` だけ）                 |
+| 同梱物の確認          | `npm pack --dry-run` の結果をログに出す（`dist/` と `README.md`、`LICENSE`、`package.json` だけ）      |
 | 発行                  | `npm publish --provenance --access public`。版に `-` を含む（`1.2.0-rc.1` など）ときは dist-tag `next` |
 | GitHub Release        | 無ければ作成（リリースノートは自動生成。プレリリース版はプレリリース扱い）                             |
 | 通知                  | テンプレートの `notify-slack.yml` で `deploy.done` を送る（失敗してもワークフローは失敗しない）        |

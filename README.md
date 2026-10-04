@@ -137,3 +137,7 @@ npm への発行手順は [docs/release.md](docs/release.md) を参照してく�
 3. **GitHub リポジトリの作成と push**（リモートは未設定です）。`main` と `development` の両方を push し、ブランチ保護を設定します。
 4. **npm の準備**: [docs/release.md](docs/release.md) の「初回だけ行うこと」（npm 組織、Trusted Publishing または `NPM_TOKEN`）。
 5. **テンプレートの hook は端末の `node` を使います**。Node.js を入れない運用ではローカルの hook は動作しません（CI では動作します）。
+
+## ライセンス
+
+[MIT](LICENSE)

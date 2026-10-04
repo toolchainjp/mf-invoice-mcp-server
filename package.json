@@ -10,7 +10,7 @@
     "マネーフォワード",
     "請求書"
   ],
-  "license": "UNLICENSED",
+  "license": "MIT",
   "author": "Toolchain (https://toolchain.jp)",
   "homepage": "https://github.com/toolchainjp/mf-invoice-mcp-server#readme",
   "repository": {
