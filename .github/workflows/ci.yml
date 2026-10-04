@@ -133,31 +133,36 @@ jobs:
           else
             echo "run=false" >> "$GITHUB_OUTPUT"; echo "no instruction files changed; eval skipped"
           fi
-      - uses: actions/setup-node@v4
+      # The token is optional: without it the eval is skipped with a warning instead of failing CI.
+      - name: Check the Claude token
+        id: token
         if: steps.changed.outputs.run == 'true'
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+        run: |
+          if [ -n "$CLAUDE_CODE_OAUTH_TOKEN" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::secrets.CLAUDE_CODE_OAUTH_TOKEN is not set; eval skipped (see README.md > Authentication)."
+          fi
+      - uses: actions/setup-node@v4
+        if: steps.token.outputs.present == 'true'
         with:
           node-version: 24
       - name: Install Claude Code
-        if: steps.changed.outputs.run == 'true'
+        if: steps.token.outputs.present == 'true'
         # npm >= 11 blocks install scripts by default; the CLI needs its postinstall step.
         run: |
           npm install -g --allow-scripts=@anthropic-ai/claude-code @anthropic-ai/claude-code
           claude --version
-      - name: Require the Claude token
-        if: steps.changed.outputs.run == 'true'
-        env:
-          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-        run: |
-          if [ -z "$CLAUDE_CODE_OAUTH_TOKEN" ]; then
-            echo "::error::secrets.CLAUDE_CODE_OAUTH_TOKEN is empty. Evals need it (see README.md > Authentication)."; exit 1
-          fi
       - name: Run promptfoo
-        if: steps.changed.outputs.run == 'true'
+        if: steps.token.outputs.present == 'true'
         env:
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
         run: bash evals/run.sh
       - name: Upload eval results and judge log (auditable)
-        if: always() && steps.changed.outputs.run == 'true'
+        if: always() && steps.token.outputs.present == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: eval-results

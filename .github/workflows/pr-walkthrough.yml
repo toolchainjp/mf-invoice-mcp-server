@@ -49,15 +49,29 @@ jobs:
             const d = JSON.parse(fs.readFileSync("diagram.json", "utf8"));
             fs.appendFileSync(process.env.GITHUB_OUTPUT, `needed=${d.needed}\nreasons=${d.reasons.join(", ")}\n`);'
 
+      # Only the diagram needs Claude. Without the token the walkthrough is built without it.
+      - name: Check the Claude token
+        id: token
+        if: steps.diagram.outputs.needed == 'true'
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+        run: |
+          if [ -n "$CLAUDE_CODE_OAUTH_TOKEN" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::secrets.CLAUDE_CODE_OAUTH_TOKEN is not set; the walkthrough is built without a diagram (see README.md > Authentication)."
+          fi
+
       - name: Read the verifier model tier
         id: model
-        if: steps.diagram.outputs.needed == 'true'
+        if: steps.token.outputs.present == 'true'
         run: |
           echo "value=$(node scripts/agents/model-for.mjs verifier)" >> "$GITHUB_OUTPUT"
 
       - name: Draw the sequence diagram
         id: draw
-        if: steps.diagram.outputs.needed == 'true'
+        if: steps.token.outputs.present == 'true'
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
@@ -78,7 +92,7 @@ jobs:
               enough to draw, return an empty `mermaid` string and say why in `note`
 
       - name: Save the diagram
-        if: steps.diagram.outputs.needed == 'true'
+        if: steps.token.outputs.present == 'true'
         env:
           STRUCTURED: ${{ steps.draw.outputs.structured_output }}
         run: |
