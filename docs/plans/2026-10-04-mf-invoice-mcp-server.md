@@ -145,7 +145,7 @@ test/unit/  test/e2e/  test/e2e-live/  test/helpers/
 
 ## 質問
 
-1. パッケージ名 `@toolchainjp/mf-invoice-mcp-server`（npm の `toolchainjp` 組織が必要）でよいか。
+1. パッケージ名 `@toolchainjp/mf-invoice-mcp-server`（npm の `toolchainjp` 組織が必要）でよいか。→ **決定**。npm 組織 `toolchainjp` は依頼者が作成済み（2026-10-05）。
 2. 発行先は npmjs.com（公開、`npx` で誰でも起動できる）でよいか。GitHub Packages は利用者側にも認証が要るため候補から外した。
 3. ライセンスは `UNLICENSED` のまま公開してよいか（公開パッケージなら MIT などを推奨）。→ **MIT に決定**（2026-10-05、依頼者の回答）。
 4. GitHub のリポジトリ名を `toolchainjp/mf-invoice-mcp-server` と仮定して `repository` を書いた。provenance はこの URL と実際のリポジトリが一致しないと失敗する。
