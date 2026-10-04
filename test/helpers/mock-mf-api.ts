@@ -32,7 +32,12 @@ export async function startMockMfApi() {
   const validAccessTokens = new Set([MOCK_STATIC_ACCESS_TOKEN]);
   let issued = 0;
 
-  const send = (res: ServerResponse, status: number, body?: unknown, headers: Record<string, string> = {}) => {
+  const send = (
+    res: ServerResponse,
+    status: number,
+    body?: unknown,
+    headers: Record<string, string> = {},
+  ) => {
     if (body === undefined) {
       res.writeHead(status, headers).end();
       return;

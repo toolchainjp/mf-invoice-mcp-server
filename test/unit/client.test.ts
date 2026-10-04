@@ -17,7 +17,10 @@ function op(toolName: string): OperationDef {
   return found;
 }
 
-function tokenProvider(tokens: string[], canRefresh = true): TokenProvider & { invalidate: ReturnType<typeof vi.fn> } {
+function tokenProvider(
+  tokens: string[],
+  canRefresh = true,
+): TokenProvider & { invalidate: ReturnType<typeof vi.fn> } {
   let i = 0;
   return {
     canRefresh,
@@ -33,14 +36,17 @@ const BASE = "https://invoice.example.test/api/v3";
 describe("buildRequest", () => {
   it("パスパラメータを埋め込み、URL 用にエンコードする", () => {
     expect(
-      buildRequest(op("get_partners_partner_id_departments_id"), { partner_id: "a/b c", department_id: "D1" }),
+      buildRequest(op("get_partners_partner_id_departments_id"), {
+        partner_id: "a/b c",
+        department_id: "D1",
+      }),
     ).toEqual({ method: "GET", path: "/partners/a%2Fb%20c/departments/D1", query: {} });
   });
 
   it("指定されたクエリだけを送る（undefined / null は送らない）", () => {
-    expect(
-      buildRequest(op("get_billings"), { page: 2, from: "2026-01-01", to: undefined, q: null }),
-    ).toEqual({ method: "GET", path: "/billings", query: { page: 2, from: "2026-01-01" } });
+    expect(buildRequest(op("get_billings"), { page: 2, from: "2026-01-01", to: undefined, q: null })).toEqual(
+      { method: "GET", path: "/billings", query: { page: 2, from: "2026-01-01" } },
+    );
   });
 
   it("ボディはリクエストボディを持つ操作のときだけ付ける", () => {
@@ -77,11 +83,20 @@ describe("buildUrl", () => {
 describe("extractErrorMessages", () => {
   it.each([
     [{ errors: [{ code: "E1", message: "名前は必須です" }] }, ["[E1] 名前は必須です"]],
-    [{ errors: [{ message: "名前は必須です" }, { message: "コードが重複しています" }] }, ["名前は必須です", "コードが重複しています"]],
-    [{ errors: { name: ["を入力してください"], code: "は不正です" } }, ["name: を入力してください", "code: は不正です"]],
+    [
+      { errors: [{ message: "名前は必須です" }, { message: "コードが重複しています" }] },
+      ["名前は必須です", "コードが重複しています"],
+    ],
+    [
+      { errors: { name: ["を入力してください"], code: "は不正です" } },
+      ["name: を入力してください", "code: は不正です"],
+    ],
     [{ errors: ["A", "B"] }, ["A", "B"]],
     [{ errors: "まとめてのエラー" }, ["まとめてのエラー"]],
-    [{ error: "invalid_token", error_description: "The access token expired" }, ["invalid_token: The access token expired"]],
+    [
+      { error: "invalid_token", error_description: "The access token expired" },
+      ["invalid_token: The access token expired"],
+    ],
     [{ message: "Not Found" }, ["Not Found"]],
     ["<html>Bad Gateway</html>", ["<html>Bad Gateway</html>"]],
     [null, []],
@@ -98,7 +113,9 @@ describe("extractErrorMessages", () => {
 describe("MfApiError", () => {
   it("ステータスとメッセージをまとめたメッセージを持つ", () => {
     const err = new MfApiError({ status: 400, body: { errors: [{ message: "名前は必須です" }] } });
-    expect(err.message).toBe("マネーフォワード クラウド請求書 API がエラーを返しました（HTTP 400）\n- 名前は必須です");
+    expect(err.message).toBe(
+      "マネーフォワード クラウド請求書 API がエラーを返しました（HTTP 400）\n- 名前は必須です",
+    );
     expect(err.messages).toEqual(["名前は必須です"]);
   });
 });
@@ -125,7 +142,11 @@ describe("MfInvoiceClient", () => {
 
   it("ボディは JSON で送る", async () => {
     const mock = createFetchMock(() => jsonResponse({ id: "P1" }, 201));
-    const client = new MfInvoiceClient({ baseUrl: BASE, tokenProvider: tokenProvider(["t"]), fetch: mock.fetch });
+    const client = new MfInvoiceClient({
+      baseUrl: BASE,
+      tokenProvider: tokenProvider(["t"]),
+      fetch: mock.fetch,
+    });
     const res = await client.request({ method: "POST", path: "/partners", query: {}, body: { name: "A" } });
     expect(res.status).toBe(201);
     expect(mock.calls[0]?.headers["content-type"]).toBe("application/json");
@@ -134,7 +155,11 @@ describe("MfInvoiceClient", () => {
 
   it("204 はデータ null として返す", async () => {
     const mock = createFetchMock(() => new Response(null, { status: 204 }));
-    const client = new MfInvoiceClient({ baseUrl: BASE, tokenProvider: tokenProvider(["t"]), fetch: mock.fetch });
+    const client = new MfInvoiceClient({
+      baseUrl: BASE,
+      tokenProvider: tokenProvider(["t"]),
+      fetch: mock.fetch,
+    });
     expect(await client.request({ method: "DELETE", path: "/partners/P1", query: {} })).toEqual({
       status: 204,
       data: null,
@@ -143,7 +168,11 @@ describe("MfInvoiceClient", () => {
 
   it("JSON でない成功レスポンスは文字列として返す", async () => {
     const mock = createFetchMock(() => new Response("ok", { status: 200 }));
-    const client = new MfInvoiceClient({ baseUrl: BASE, tokenProvider: tokenProvider(["t"]), fetch: mock.fetch });
+    const client = new MfInvoiceClient({
+      baseUrl: BASE,
+      tokenProvider: tokenProvider(["t"]),
+      fetch: mock.fetch,
+    });
     expect((await client.request({ method: "GET", path: "/office", query: {} })).data).toBe("ok");
   });
 
@@ -151,7 +180,11 @@ describe("MfInvoiceClient", () => {
     const mock = createFetchMock(() =>
       jsonResponse({ errors: [{ message: "Rate limit exceeded" }] }, 429, { "retry-after": "12" }),
     );
-    const client = new MfInvoiceClient({ baseUrl: BASE, tokenProvider: tokenProvider(["t"]), fetch: mock.fetch });
+    const client = new MfInvoiceClient({
+      baseUrl: BASE,
+      tokenProvider: tokenProvider(["t"]),
+      fetch: mock.fetch,
+    });
     const err = await client.request({ method: "GET", path: "/items", query: {} }).catch((e: unknown) => e);
     expect(err).toBeInstanceOf(MfApiError);
     expect(err).toMatchObject({ status: 429, retryAfter: "12", messages: ["Rate limit exceeded"] });
@@ -170,8 +203,14 @@ describe("MfInvoiceClient", () => {
 
   it("再試行でも 401 ならエラーにする（無限に再試行しない）", async () => {
     const mock = createFetchMock(() => jsonResponse({ error: "invalid_token" }, 401));
-    const client = new MfInvoiceClient({ baseUrl: BASE, tokenProvider: tokenProvider(["a", "b"]), fetch: mock.fetch });
-    await expect(client.request({ method: "GET", path: "/office", query: {} })).rejects.toMatchObject({ status: 401 });
+    const client = new MfInvoiceClient({
+      baseUrl: BASE,
+      tokenProvider: tokenProvider(["a", "b"]),
+      fetch: mock.fetch,
+    });
+    await expect(client.request({ method: "GET", path: "/office", query: {} })).rejects.toMatchObject({
+      status: 401,
+    });
     expect(mock.calls).toHaveLength(2);
   });
 
@@ -179,7 +218,9 @@ describe("MfInvoiceClient", () => {
     const mock = createFetchMock(() => jsonResponse({ error: "invalid_token" }, 401));
     const provider = tokenProvider(["a"], false);
     const client = new MfInvoiceClient({ baseUrl: BASE, tokenProvider: provider, fetch: mock.fetch });
-    await expect(client.request({ method: "GET", path: "/office", query: {} })).rejects.toBeInstanceOf(MfApiError);
+    await expect(client.request({ method: "GET", path: "/office", query: {} })).rejects.toBeInstanceOf(
+      MfApiError,
+    );
     expect(mock.calls).toHaveLength(1);
     expect(provider.invalidate).not.toHaveBeenCalled();
   });
@@ -188,7 +229,11 @@ describe("MfInvoiceClient", () => {
     const mock = createFetchMock(() => {
       throw new TypeError("fetch failed");
     });
-    const client = new MfInvoiceClient({ baseUrl: BASE, tokenProvider: tokenProvider(["t"]), fetch: mock.fetch });
+    const client = new MfInvoiceClient({
+      baseUrl: BASE,
+      tokenProvider: tokenProvider(["t"]),
+      fetch: mock.fetch,
+    });
     await expect(client.request({ method: "GET", path: "/office", query: {} })).rejects.toThrow(
       /通信に失敗しました（GET \/office）: fetch failed/,
     );

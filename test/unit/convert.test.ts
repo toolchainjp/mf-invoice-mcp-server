@@ -120,7 +120,10 @@ describe("convertSchema", () => {
 
   it("properties という名前のプロパティや type という名前のプロパティを壊さない", () => {
     expect(
-      convertSchema({ type: "object", properties: { type: { type: "string" }, example: { type: "integer" } } }, doc),
+      convertSchema(
+        { type: "object", properties: { type: { type: "string" }, example: { type: "integer" } } },
+        doc,
+      ),
     ).toEqual({ type: "object", properties: { type: { type: "string" }, example: { type: "integer" } } });
   });
 
@@ -239,7 +242,9 @@ describe("extractOperations（document.yaml）", () => {
 
 describe("extractOperations（エラーと補完）", () => {
   it("operationId が無い操作はエラー", () => {
-    expect(() => extractOperations({ openapi: "3.1.0", paths: { "/a": { get: {} } } })).toThrow(/operationId/);
+    expect(() => extractOperations({ openapi: "3.1.0", paths: { "/a": { get: {} } } })).toThrow(
+      /operationId/,
+    );
   });
 
   it("application/json 以外のリクエストボディはエラー", () => {
@@ -265,7 +270,13 @@ describe("extractOperations（エラーと補完）", () => {
         },
       },
     };
-    expect(extractOperations(doc).map((o) => o.kind)).toEqual(["read", "create", "update", "update", "delete"]);
+    expect(extractOperations(doc).map((o) => o.kind)).toEqual([
+      "read",
+      "create",
+      "update",
+      "update",
+      "delete",
+    ]);
   });
 
   it("操作レベルのパラメータがパスレベルの同名パラメータを上書きする", () => {

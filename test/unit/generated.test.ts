@@ -6,7 +6,9 @@ import { extractOperations, type OpenApiDocument } from "../../src/openapi/conve
 
 describe("src/generated/operations.ts", () => {
   it("document.yaml から生成した内容と一致する（不一致なら npm run generate を実行する）", () => {
-    const spec = parse(readFileSync(new URL("../../document.yaml", import.meta.url), "utf8")) as OpenApiDocument;
+    const spec = parse(
+      readFileSync(new URL("../../document.yaml", import.meta.url), "utf8"),
+    ) as OpenApiDocument;
     expect(operations).toEqual(extractOperations(spec));
   });
 

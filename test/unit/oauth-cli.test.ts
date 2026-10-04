@@ -31,7 +31,8 @@ function start(fetchImpl: typeof fetch, store = memoryStore()) {
     log,
     openBrowser: () => {},
     timeoutMs: 5_000,
-    onAuthorizeUrl: (authorizeUrl, callbackUrl) => resolveUrls({ authorizeUrl: new URL(authorizeUrl), callbackUrl }),
+    onAuthorizeUrl: (authorizeUrl, callbackUrl) =>
+      resolveUrls({ authorizeUrl: new URL(authorizeUrl), callbackUrl }),
   });
   return { urls, done, store, log };
 }
@@ -61,7 +62,12 @@ describe("buildAuthorizeUrl", () => {
 describe("runAuthCommand", () => {
   it("コールバックで受け取った認可コードをトークンに交換し、ストアに保存する", async () => {
     const tokenMock = createFetchMock(() =>
-      jsonResponse({ access_token: "acc", refresh_token: "ref", expires_in: 3600, scope: "mfc/invoice/data.read" }),
+      jsonResponse({
+        access_token: "acc",
+        refresh_token: "ref",
+        expires_in: 3600,
+        scope: "mfc/invoice/data.read",
+      }),
     );
     const { urls, done, store } = start(tokenMock.fetch);
     const { authorizeUrl, callbackUrl } = await urls;

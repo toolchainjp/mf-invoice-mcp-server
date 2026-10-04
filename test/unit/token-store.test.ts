@@ -19,7 +19,12 @@ describe("FileTokenStore", () => {
     const path = join(tempDir(), "nested", "dir", "token.json");
     const store = new FileTokenStore(path);
     store.save({ client_id: "c", refresh_token: "r", access_token: "a", expires_at: 123 });
-    expect(store.load()).toMatchObject({ client_id: "c", refresh_token: "r", access_token: "a", expires_at: 123 });
+    expect(store.load()).toMatchObject({
+      client_id: "c",
+      refresh_token: "r",
+      access_token: "a",
+      expires_at: 123,
+    });
     expect(store.load()?.updated_at).toEqual(expect.any(String));
     expect(JSON.parse(readFileSync(path, "utf8")).refresh_token).toBe("r");
   });
@@ -56,6 +61,8 @@ describe("defaultTokenFile", () => {
   });
 
   it("無ければホームディレクトリの .config の下", () => {
-    expect(defaultTokenFile({}, "/home/u")).toBe(join("/home/u", ".config", "mf-invoice-mcp-server", "token.json"));
+    expect(defaultTokenFile({}, "/home/u")).toBe(
+      join("/home/u", ".config", "mf-invoice-mcp-server", "token.json"),
+    );
   });
 });

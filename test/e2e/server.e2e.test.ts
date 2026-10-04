@@ -95,7 +95,11 @@ describe("E2E: stdio で起動した MCP サーバー × 模擬 API", () => {
   it("リフレッシュトークンでアクセストークンを取得し（client_secret_basic）、Bearer で API を呼ぶ", async () => {
     const result = await client.callTool({ name: "get_office", arguments: {} });
     expect(result.isError, textOf(result)).toBeFalsy();
-    expect(JSON.parse(textOf(result))).toEqual({ id: "OFFICE1", name: "テスト株式会社", office_code: "1234-5678" });
+    expect(JSON.parse(textOf(result))).toEqual({
+      id: "OFFICE1",
+      name: "テスト株式会社",
+      office_code: "1234-5678",
+    });
 
     const [tokenReq] = api.tokenRequests();
     expect(tokenReq?.authorization).toBe(BASIC_AUTH);
@@ -110,7 +114,11 @@ describe("E2E: stdio で起動した MCP サーバー × 模擬 API", () => {
     await client.callTool({ name: "get_office", arguments: {} });
     expect(api.tokenRequests()).toHaveLength(0);
     const saved = JSON.parse(readFileSync(tokenFile, "utf8")) as Record<string, unknown>;
-    expect(saved).toMatchObject({ client_id: MOCK_CLIENT_ID, access_token: "access-1", refresh_token: "refresh-1" });
+    expect(saved).toMatchObject({
+      client_id: MOCK_CLIENT_ID,
+      access_token: "access-1",
+      refresh_token: "refresh-1",
+    });
   });
 
   it("クエリパラメータを送る", async () => {
@@ -216,7 +224,11 @@ describe("E2E: stdio で起動した MCP サーバー × 模擬 API", () => {
   });
 
   it("無効なアクセストークンは 401 のエラー結果になる", async () => {
-    const c = await startClient({ MF_ACCESS_TOKEN: "wrong", MF_TOKEN_FILE: "none", MF_API_BASE_URL: api.apiBaseUrl });
+    const c = await startClient({
+      MF_ACCESS_TOKEN: "wrong",
+      MF_TOKEN_FILE: "none",
+      MF_API_BASE_URL: api.apiBaseUrl,
+    });
     const result = await c.callTool({ name: "get_office", arguments: {} });
     expect(result.isError).toBe(true);
     expect(textOf(result)).toContain("HTTP 401");

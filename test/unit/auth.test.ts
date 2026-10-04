@@ -98,11 +98,15 @@ describe("requestToken", () => {
       params: { grant_type: "refresh_token", refresh_token: "r" },
       fetch: mock.fetch,
     });
-    expect(mock.calls[0]?.headers.authorization).toBe(`Basic ${Buffer.from("c%3Aid:s+e%2Bc").toString("base64")}`);
+    expect(mock.calls[0]?.headers.authorization).toBe(
+      `Basic ${Buffer.from("c%3Aid:s+e%2Bc").toString("base64")}`,
+    );
   });
 
   it("エラー応答は OAuth のエラーコードとステータスを持つ AuthError にする", async () => {
-    const mock = createFetchMock(() => jsonResponse({ error: "invalid_grant", error_description: "expired" }, 400));
+    const mock = createFetchMock(() =>
+      jsonResponse({ error: "invalid_grant", error_description: "expired" }, 400),
+    );
     const err = await requestToken({
       tokenUrl: TOKEN_URL,
       clientId: "cid",

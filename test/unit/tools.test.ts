@@ -23,7 +23,9 @@ describe("buildToolDefinition", () => {
     const def = buildToolDefinition(op("put_office_registration_code"));
     expect(def.description).toContain("適格請求書発行事業者番号");
     expect(def.description).toContain("使う場面:");
-    expect(def.description).toContain("使わない場面: 登録番号を削除する場合はdelete_office_registration_codeを使用。");
+    expect(def.description).toContain(
+      "使わない場面: 登録番号を削除する場合はdelete_office_registration_codeを使用。",
+    );
     expect(def.description).toContain("HTTP: PUT /office/registration_code");
     expect(def.description).toContain("mfc/invoice/data.write");
     expect(def.title).toBe("Update registration code of my office");
@@ -46,7 +48,10 @@ describe("buildToolDefinition", () => {
     ["put_partners_id", { readOnlyHint: false, destructiveHint: true, idempotentHint: true }],
     ["delete_partners_id", { readOnlyHint: false, destructiveHint: true, idempotentHint: true }],
     // POST だが operationKind は create
-    ["post_quotes_quote_id_convert_to_billing", { readOnlyHint: false, destructiveHint: false, idempotentHint: false }],
+    [
+      "post_quotes_quote_id_convert_to_billing",
+      { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
+    ],
   ])("%s の注記は operationKind から決まる", (name, hints) => {
     expect(buildToolDefinition(op(name)).annotations).toMatchObject({ ...hints, openWorldHint: true });
   });
@@ -70,12 +75,18 @@ describe("buildInputSchema", () => {
     });
   });
 
-  it("リクエストボディは body 引数にまとめる", () => {
+  it("リクエストボディは body 引数にまとめ、必須項目を持つボディは body 自体を必須にする", () => {
     const schema = buildInputSchema(op("put_office_registration_code"));
     expect(schema.properties.body).toMatchObject({
       type: "object",
       required: ["registration_code"],
     });
+    expect(schema.required).toEqual(["body"]);
+    expect(buildInputSchema(op("post_partners")).required).toEqual(["body"]);
+  });
+
+  it("必須項目の無いボディ（郵送依頼）は省略できる", () => {
+    expect(buildInputSchema(op("post_billings_billing_id_posting")).required).toEqual(["billing_id"]);
   });
 
   it("引数の無い操作は空の properties", () => {
@@ -133,7 +144,9 @@ describe("ToolRegistry", () => {
     expect(registry.validate("get_partners", { page: "1" })).toEqual([
       expect.stringContaining("page: 型が違います"),
     ]);
-    expect(registry.validate("get_partners", { foo: 1 })).toEqual([expect.stringContaining("未定義の項目 foo")]);
+    expect(registry.validate("get_partners", { foo: 1 })).toEqual([
+      expect.stringContaining("未定義の項目 foo"),
+    ]);
     expect(registry.validate("get_partners", { per_page: 101 })[0]).toContain("per_page");
   });
 });
