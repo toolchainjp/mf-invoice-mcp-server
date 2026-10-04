@@ -1,110 +1,139 @@
-# template
+# mf-invoice-mcp-server
 
-Starter template for `toolchainjp` projects. Creating a repo from this template gives you a
-consistent baseline instead of setting the same things up by hand each time:
+[マネーフォワード クラウド請求書 API v3](https://biz.moneyforward.com/support/invoice/guide/api-guide/a03.html) を、Claude などの
+MCP クライアントから使えるようにする **MCP サーバー**（TypeScript / stdio）です。npm パッケージ
+`@toolchainjp/mf-invoice-mcp-server` として配布します。
 
-- a **two-branch development workflow** (`main` + `development`) that keeps `main` releasable,
-- **issue and PR templates** under [`.github/`](.github/) so reports and reviews arrive in a
-  predictable shape,
-- **Claude Code wired into GitHub Actions**, so `@claude` works in issues and PRs from day one.
+リポジトリ直下の [`document.yaml`](document.yaml)（Money Forward Invoice API v3.6.0 の仕様書）から、全 45 操作を MCP ツールとして自動生成しています。
 
-## Development workflow
+- 参照系 16 ツール: 自社情報、取引先・取引先部署、品目、請求書・請求書の品目、見積書・見積書の品目、送付履歴
+- 書き込み系 29 ツール: 上記の作成・更新・削除、入金ステータスの変更、見積書 → 請求書の変換、郵送依頼・キャンセル など
+- `MF_READ_ONLY=true` で参照系だけを公開できます（初めて使うときはこちらを推奨）
+- `MF_EXCLUDE_TOOLS` で個別のツールを無効化できます（例: 料金が発生しうる郵送依頼を封じる）
 
-This template is opinionated about branching. The rules:
+ツールの一覧と引数は [docs/tools.md](docs/tools.md) を参照してください。
 
-| Branch | Purpose | Direct commits |
-| --- | --- | --- |
-| `main` | Always releasable. Reflects what is deployed. | **Never** — PR only |
-| `development` | Integration branch. Where work lands first. | Avoid — PR preferred |
-| `feature/*`, `fix/*` | One branch per issue or change. | Yes |
+## クイックスタート
 
-The normal cycle:
+Node.js 22.12 以上が必要です。
 
-1. Branch off `development` — `git switch development && git pull && git switch -c feature/<short-name>`
-2. Commit and push to your branch, then open a PR **targeting `development`**.
-3. Once reviewed and merged, `development` accumulates changes.
-4. To release, open a PR from `development` → `main`. Merging that is the release.
+### 1. アプリを作成する
 
-Never `git commit` on `main` or `development` locally and push. If you catch yourself on the wrong
-branch with uncommitted work, `git stash`, switch to a proper branch, then `git stash pop`.
+マネーフォワード クラウドの「アプリポータル」でアプリを作成し、クライアント ID とクライアントシークレットを控えます。
+リダイレクト URI には `http://localhost:8765/callback` を登録します（詳しくは [docs/setup.md](docs/setup.md)）。
 
-### Setup after copying the template
-
-Two things are **not** carried over by "Use this template" and need doing once per new repo:
-
-- **Branches.** Only the default branch is copied unless you tick **"Include all branches"** on the
-  create-repo screen. If you forget, recreate `development` with
-  `git switch -c development && git push -u origin development`.
-- **Branch protection.** Protection rules are never copied. To make the "no commits to `main`" rule
-  actually enforced rather than merely documented, go to Settings → Rules → Rulesets (or Branches →
-  Add rule) and, for `main` and `development`, require a pull request before merging and block force
-  pushes.
-
-## Claude Code in GitHub Actions
-
-This template ships with [`.github/workflows/claude.yml`](.github/workflows/claude.yml), which runs
-[`anthropics/claude-code-action`](https://github.com/anthropics/claude-code-action) whenever `@claude`
-is mentioned in an issue, an issue comment, a PR review, or a PR review comment — and when an issue
-whose title or body mentions `@claude` is opened or assigned.
-
-### Authentication
-
-The workflow authenticates with `${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}` — a Claude subscription
-token rather than a metered API key. Keeping it as an **organization secret** with repository access
-set to *All repositories* means repos created from this template inherit it automatically, with no
-per-repo setup.
-
-#### Getting the token
-
-1. Install Claude Code locally if you haven't: `npm install -g @anthropic-ai/claude-code`
-2. Run `claude setup-token`. It opens a browser, asks you to sign in to the Claude account whose
-   Pro/Max subscription should pay for the runs, and prints a long-lived token (`sk-ant-oat01-…`).
-   The command requires a paid subscription; on a free account it will not issue a token.
-3. Copy the token and add it as a secret named **`CLAUDE_CODE_OAUTH_TOKEN`**:
-   - org-wide (preferred): Organization → Settings → Secrets and variables → Actions → *New
-     organization secret*, repository access *All repositories*;
-   - or per repo: Settings → Secrets and variables → Actions → *New repository secret*.
-
-Treat the token like a password — it grants access to the subscription. Rotate it by re-running
-`claude setup-token` and updating the secret.
-
-Note that **"Use this template" copies files only**; secrets, variables, and Actions settings are
-never copied. Organization secrets also only reach **public** repositories on the GitHub Free plan,
-so a private repo created from this template needs its own `CLAUDE_CODE_OAUTH_TOKEN` repository
-secret, or the workflow will run with an empty token and fail. Register it once with:
+### 2. 認可してリフレッシュトークンを保存する
 
 ```bash
-claude setup-token                       # prints the token
-bash scripts/bootstrap-secrets.sh        # asks for the token and sets the repository secret via gh
+MF_CLIENT_ID=<クライアントID> MF_CLIENT_SECRET=<クライアントシークレット> npx @toolchainjp/mf-invoice-mcp-server auth
 ```
 
-The script also offers to set `SLACK_BOT_TOKEN` (optional, for harness notifications). Values are
-entered interactively and never written to disk.
+ブラウザでマネーフォワード クラウドにログインしてアクセスを許可すると、トークンが
+`~/.config/mf-invoice-mcp-server/token.json` に保存されます。以後、アクセストークンは自動で更新されます。
 
-To use a metered API key instead, swap the input for `anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}`.
+### 3. MCP クライアントに登録する
 
-### Optional tweaks
+Claude Code の例:
 
-- Give Claude a fixed job with `prompt:` in the workflow's `with:` block — without it, Claude follows
-  the instructions in the comment that tagged it.
-- Restrict or extend tools with `claude_args`, e.g. `'--allowed-tools Bash(gh pr:*)'`, or pin a model
-  with `'--model claude-opus-5'`. See the
-  [action usage docs](https://github.com/anthropics/claude-code-action/blob/main/docs/usage.md).
-- `additional_permissions: actions: read` is already set so Claude can read CI results on PRs.
-- Adjust the `permissions:` block if Claude needs write access (e.g. `contents: write` and
-  `pull-requests: write` to let it push commits or open PRs).
+```bash
+claude mcp add mf-invoice -e MF_CLIENT_ID=<クライアントID> -e MF_CLIENT_SECRET=<クライアントシークレット> -e MF_READ_ONLY=true -- npx -y @toolchainjp/mf-invoice-mcp-server
+```
 
-## Agent harness
+Claude Desktop など JSON で設定するクライアントの例、Docker での起動、アクセストークンだけで使う方法は [docs/setup.md](docs/setup.md) にまとめています。
 
-This template also ships an **agent operating harness**: a pre-defined permission policy
-(`.claude/settings.json`), hooks that enforce format / lint / typecheck / test and block
-irreversible operations (`.claude/hooks/`), a read-only reviewer subagent, `/plan` → approval →
-`/implement` → `/verify` → `/review` commands, CI with evals, and one-way Slack notifications.
+## 設定（環境変数）
 
-Start with [`docs/agent-harness/GUIDE.md`](docs/agent-harness/GUIDE.md) — it explains how the
-pieces fit together, with diagrams, and how to use the repository day to day
-([日本語版](docs/agent-harness/GUIDE.ja.md)). For the rules themselves see
-[`docs/agent-harness/POLICY.md`](docs/agent-harness/POLICY.md) — it explains the
-permission tiers, the two human approval gates, the kill switch, and the per-project setup
-checklist. Project-specific facts (approvers, deploy target, budget, commands) live in
-`.claude/harness.config.json`; copy `.claude/harness.config.example.json` to create it.
+| 変数                   | 既定値                                         | 説明                                                                        |
+| ---------------------- | ---------------------------------------------- | --------------------------------------------------------------------------- |
+| `MF_CLIENT_ID`         | —                                              | アプリのクライアント ID                                                     |
+| `MF_CLIENT_SECRET`     | —                                              | アプリのクライアントシークレット                                            |
+| `MF_REFRESH_TOKEN`     | —                                              | リフレッシュトークン。`auth` でトークンファイルに保存した場合は不要         |
+| `MF_ACCESS_TOKEN`      | —                                              | 取得済みのアクセストークン（自動更新しない簡易方式。有効 1 時間）           |
+| `MF_TOKEN_FILE`        | `~/.config/mf-invoice-mcp-server/token.json`   | トークンの保存先。`none` で保存しない（`XDG_CONFIG_HOME` があればその下）   |
+| `MF_TOKEN_AUTH_METHOD` | `client_secret_basic`                          | トークンエンドポイントでのクライアント認証方式（`client_secret_post` も可） |
+| `MF_READ_ONLY`         | `false`                                        | `true` なら参照系のツールだけを公開する                                     |
+| `MF_EXCLUDE_TOOLS`     | —                                              | 公開しないツール名（カンマ区切り）。存在しない名前を書くと起動しない        |
+| `MF_REDIRECT_URI`      | `http://localhost:8765/callback`               | `auth` の受け口。アプリポータルに登録した値と完全に一致させる               |
+| `MF_SCOPES`            | `mfc/invoice/data.read mfc/invoice/data.write` | `auth` で要求するスコープ。参照だけなら `mfc/invoice/data.read`             |
+| `MF_TIMEOUT_MS`        | `30000`                                        | API 呼び出しのタイムアウト（ミリ秒）                                        |
+| `MF_API_BASE_URL`      | `https://invoice.moneyforward.com/api/v3`      | API のベース URL（テスト用）                                                |
+| `MF_TOKEN_URL`         | `https://api.biz.moneyforward.com/token`       | トークンエンドポイント（テスト用）                                          |
+| `MF_AUTHORIZE_URL`     | `https://api.biz.moneyforward.com/authorize`   | 認可エンドポイント（テスト用）                                              |
+
+認証方式は「クライアント ID・シークレット + リフレッシュトークン（環境変数またはトークンファイル）」を優先し、
+そろわなければ `MF_ACCESS_TOKEN` を使います。どちらも無くてもサーバーは起動し、ツールを呼んだ時点で設定方法を案内するエラーを返します。
+
+## 安全のための仕組み
+
+- 書き込み系ツールには MCP の注記（`destructiveHint` など）と「データを変更します」の注意書きが付きます。クライアントは実行前に確認を求められます。
+- 郵送依頼（`post_billings_billing_id_posting` / `post_quotes_quote_id_posting`）は料金が発生しうるため、説明に明記しています。
+  使わない場合は `MF_EXCLUDE_TOOLS=post_billings_billing_id_posting,post_quotes_quote_id_posting` で無効化してください。
+- 入力は仕様書のスキーマで検証し、不正なら API を呼ばずにエラーを返します。
+
+## 開発
+
+Node.js 24 を前提にしています。端末に Node.js を入れない場合は、[`compose.yaml`](compose.yaml) の `dev` コンテナで同じコマンドを実行します。
+
+```bash
+docker compose run --rm dev npm ci
+```
+
+```bash
+docker compose run --rm dev npm run check
+```
+
+| コマンド                | 内容                                                              |
+| ----------------------- | ----------------------------------------------------------------- |
+| `npm run build`         | `dist/` にビルド                                                  |
+| `npm run generate`      | `document.yaml` から `src/generated/` と `docs/tools.md` を再生成 |
+| `npm test`              | ユニットテスト                                                    |
+| `npm run test:e2e`      | E2E テスト（ビルド → stdio 起動 → 模擬 API）                      |
+| `npm run test:all`      | ユニット + E2E                                                    |
+| `npm run test:e2e:live` | 実 API に対するライブ E2E（参照系のみ・要認証情報）               |
+| `npm run check`         | format チェック・lint・型チェック・全テスト                       |
+
+テストの考え方と実行方法は [docs/testing.md](docs/testing.md)、内部構成は [docs/architecture.md](docs/architecture.md)、
+npm への発行手順は [docs/release.md](docs/release.md) を参照してください。
+
+## ドキュメント
+
+| ファイル                                                                                         | 内容                                                 |
+| ------------------------------------------------------------------------------------------------ | ---------------------------------------------------- |
+| [docs/setup.md](docs/setup.md)                                                                   | アプリの作成、認可、MCP クライアントへの登録         |
+| [docs/tools.md](docs/tools.md)                                                                   | ツール一覧と引数（自動生成）                         |
+| [docs/testing.md](docs/testing.md)                                                               | テスト戦略と実行方法                                 |
+| [docs/architecture.md](docs/architecture.md)                                                     | 内部構成と処理の流れ                                 |
+| [docs/release.md](docs/release.md)                                                               | リリースタグによる npm 発行                          |
+| [docs/plans/2026-10-04-mf-invoice-mcp-server.md](docs/plans/2026-10-04-mf-invoice-mcp-server.md) | 初回実装の設計メモ                                   |
+| [docs/agent-harness/GUIDE.ja.md](docs/agent-harness/GUIDE.ja.md)                                 | エージェント運用ハーネスの使い方（テンプレート由来） |
+
+## 開発フローとテンプレート
+
+このリポジトリは [`toolchainjp/template`](https://github.com/toolchainjp/template) から作成しています。
+
+- ブランチ: `main`（常にリリース可能・PR のみ）／`development`（統合ブランチ）／`feature/*` `fix/*`（作業ブランチ）。PR は `development` 向けに作ります。
+- リリース: `development` → `main` の PR をマージし、`main` に `v*.*.*` タグを push すると npm に発行されます（[docs/release.md](docs/release.md)）。
+- Claude Code での作業ルールは [CLAUDE.md](CLAUDE.md)、運用ポリシーは [docs/agent-harness/POLICY.md](docs/agent-harness/POLICY.md) にあります。
+- `@claude` を Issue / PR で使うには、リポジトリに `CLAUDE_CODE_OAUTH_TOKEN` シークレットの登録が必要です（`scripts/bootstrap-secrets.sh`）。
+
+### 初回セットアップで人が行うこと
+
+`.github/workflows/` と `.claude/` は Claude Code から編集できない保護パスのため、用意した案を手でコピーします。
+
+1. **発行ワークフローの配置**:
+
+   ```bash
+   cp docs/release/release.yml .github/workflows/release.yml
+   ```
+
+2. **ハーネス設定の配置**（CI の format / lint / typecheck / test はこのファイルがあるときだけ動きます）:
+
+   ```bash
+   cp docs/agent-harness/harness.config.proposed.json .claude/harness.config.json
+   ```
+
+   コピー後、`$schema` を `"./harness.config.schema.json"` に書き換えてください。
+
+3. **GitHub リポジトリの作成と push**（リモートは未設定です）。`main` と `development` の両方を push し、ブランチ保護を設定します。
+4. **npm の準備**: [docs/release.md](docs/release.md) の「初回だけ行うこと」（npm 組織、Trusted Publishing または `NPM_TOKEN`）。
+5. **テンプレートの hook は端末の `node` を使います**。Node.js を入れない運用ではローカルの hook は動作しません（CI では動作します）。
