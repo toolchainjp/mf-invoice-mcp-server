@@ -1,0 +1,167 @@
+name: Claude Code
+
+on:
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+  issues:
+    types: [opened, assigned, labeled]
+  pull_request_review:
+    types: [submitted]
+
+jobs:
+  claude:
+    # Only run when @claude is mentioned (or, for issues, when opened/assigned).
+    # `labeled` events are handled by the `plan` job below.
+    if: |
+      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
+      (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude')) ||
+      (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@claude')) ||
+      (github.event_name == 'issues' && github.event.action != 'labeled' && (contains(github.event.issue.body, '@claude') || contains(github.event.issue.title, '@claude')))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # create branches and commits
+      pull-requests: write # open PRs and comment
+      issues: write # comment on issues
+      id-token: write
+      actions: read # Required for Claude to read CI results on PRs
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Read budget from harness.config.json (falls back to the example)
+        id: budget
+        run: |
+          node -e '
+            const fs = require("fs");
+            const f = fs.existsSync(".claude/harness.config.json") ? ".claude/harness.config.json" : ".claude/harness.config.example.json";
+            const b = JSON.parse(fs.readFileSync(f, "utf8")).budget;
+            const turns = process.env.HARNESS_MAX_TURNS || b.maxTurns;
+            const minutes = process.env.HARNESS_MAX_MINUTES || b.maxMinutes;
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, `maxTurns=${turns}\nmaxMinutes=${minutes}\n`);'
+        env:
+          # Repository/organisation variables override the config (kill switch: set HARNESS_MAX_TURNS=1)
+          HARNESS_MAX_TURNS: ${{ vars.HARNESS_MAX_TURNS }}
+          HARNESS_MAX_MINUTES: ${{ vars.HARNESS_MAX_MINUTES }}
+
+      - name: Run Claude Code
+        id: claude
+        uses: anthropics/claude-code-action@v1
+        timeout-minutes: ${{ fromJSON(steps.budget.outputs.maxMinutes) }}
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+
+          # This is an optional setting that allows Claude to read CI results on PRs
+          additional_permissions: |
+            actions: read
+
+          # Budget: turns come from harness.config.json (or vars.HARNESS_MAX_TURNS).
+          # Project permissions/hooks come from the committed .claude/settings.json.
+          claude_args: |
+            --max-turns ${{ steps.budget.outputs.maxTurns }}
+
+      # The hooks write every block to .harness/blocked.jsonl rather than talking to
+      # Slack themselves, so all outbound messages stay on the GitHub Actions path.
+      - name: Collect hook blocks
+        id: blocked
+        if: always()
+        run: |
+          node -e '
+            const fs = require("fs");
+            const p = ".harness/blocked.jsonl";
+            if (!fs.existsSync(p)) return fs.appendFileSync(process.env.GITHUB_OUTPUT, "count=0\n");
+            const rows = fs.readFileSync(p, "utf8").trim().split("\n").filter(Boolean).map((l) => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean);
+            const first = rows[0] || {};
+            fs.appendFileSync(process.env.GITHUB_OUTPUT,
+              `count=${rows.length}\nkind=${first.kind || "unknown"}\nreason=${JSON.stringify(String(first.reason || "").slice(0, 200))}\n`);'
+
+  notify-blocked:
+    needs: claude
+    if: always() && needs.claude.result != 'skipped'
+    permissions:
+      contents: read
+      issues: write
+    uses: ./.github/workflows/notify-slack.yml
+    secrets: inherit
+    with:
+      event: blocked
+      payload: |
+        {"repo":"${{ github.repository }}","number":${{ github.event.issue.number || github.event.pull_request.number || 0 }},
+         "url":"${{ github.event.issue.html_url || github.event.pull_request.html_url }}","actor":"${{ github.actor }}",
+         "kind":"hook.block","reason":"Claude のターン中に hook がブロックした操作があります。Actions ログの [harness] 行を確認してください。"}
+
+  # Issue labelled `plan`: write a design memo as a comment and stop. No branch, no PR.
+  plan:
+    if: github.event_name == 'issues' && github.event.action == 'labeled' && github.event.label.name == 'plan'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: read
+      id-token: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Read budget and approvers from harness.config.json
+        id: cfg
+        run: |
+          node -e '
+            const fs = require("fs");
+            const f = fs.existsSync(".claude/harness.config.json") ? ".claude/harness.config.json" : ".claude/harness.config.example.json";
+            const c = JSON.parse(fs.readFileSync(f, "utf8"));
+            const turns = process.env.HARNESS_MAX_TURNS || c.budget.maxTurns;
+            const minutes = process.env.HARNESS_MAX_MINUTES || c.budget.maxMinutes;
+            const approvers = (c.approvers || []).map((a) => "@" + a).join(" ");
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, `maxTurns=${turns}\nmaxMinutes=${minutes}\napprovers=${approvers}\nconfigured=${f.endsWith("harness.config.json")}\n`);'
+        env:
+          HARNESS_MAX_TURNS: ${{ vars.HARNESS_MAX_TURNS }}
+          HARNESS_MAX_MINUTES: ${{ vars.HARNESS_MAX_MINUTES }}
+
+      - name: Refuse to plan until harness.config.json exists
+        if: steps.cfg.outputs.configured != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue comment ${{ github.event.issue.number }} --body "設計メモを作成できません: \`.claude/harness.config.json\` がまだありません。\`.claude/harness.config.example.json\` をコピーして必須項目（approvers, deploy.target, deploy.productionBranch, commands.test）を設定してください。手順は docs/agent-harness/POLICY.md。"
+          exit 1
+
+      - name: Write the design memo as a comment (planner)
+        id: claude
+        uses: anthropics/claude-code-action@v1
+        timeout-minutes: ${{ fromJSON(steps.cfg.outputs.maxMinutes) }}
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          track_progress: true
+          claude_args: |
+            --max-turns ${{ steps.cfg.outputs.maxTurns }}
+            --disallowedTools Edit,Write,NotebookEdit
+          prompt: |
+            This issue has the `plan` label. Produce a design memo ONLY. Do not create a branch, do not edit files, do not open a PR.
+            Follow the memo structure in .claude/agents/planner.md (目的 / 変更するファイル / 変更しないもの / テスト方針 / リスクと影響 / 質問 / MCP / 承認).
+            Explore the repository first; do not guess. Put every open question under 「質問」.
+            Post the memo as your final comment on this issue, ending with:
+            「承認待ち: ${{ steps.cfg.outputs.approvers }} — 承認する場合はこのコメントに『承認』と返信し、`@claude implement` で実装を依頼してください。」
+            Issue title: ${{ github.event.issue.title }}
+            Issue body:
+            ${{ github.event.issue.body }}
+
+  notify-plan:
+    needs: plan
+    if: always() && needs.plan.result != 'skipped'
+    permissions:
+      contents: read
+      issues: write
+    uses: ./.github/workflows/notify-slack.yml
+    secrets: inherit
+    with:
+      event: ${{ needs.plan.result == 'success' && 'plan.ready' || 'blocked' }}
+      payload: |
+        {"repo":"${{ github.repository }}","number":${{ github.event.issue.number }},
+         "title":${{ toJSON(github.event.issue.title) }},"url":"${{ github.event.issue.html_url }}",
+         "actor":"${{ github.actor }}","kind":"plan.${{ needs.plan.result }}","reason":"plan job ${{ needs.plan.result }}"}

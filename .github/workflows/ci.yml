@@ -1,0 +1,182 @@
+name: CI
+
+# Runs on every pull request:
+#   harness        - hook / notify tests, JSON validity, config schema check (always)
+#   project-checks - format / lint / typecheck / test from .claude/harness.config.json (skipped with a warning until the config exists)
+#   eval           - promptfoo golden cases, only when instruction files changed
+#   notify-failure - Slack "ci.failed" (never fails the workflow)
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+  pull-requests: read
+  issues: write # notify-failure stores the Slack thread id in a hidden comment
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  harness:
+    name: Harness tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Hook and notify tests
+        run: bash tests/harness/run.sh
+      - name: Validate harness.config.json against the schema
+        if: hashFiles('.claude/harness.config.json') != ''
+        run: npx --yes ajv-cli@5 validate -s .claude/harness.config.schema.json -d .claude/harness.config.json --strict=false
+      - name: Warn when the project config is missing
+        if: hashFiles('.claude/harness.config.json') == ''
+        run: |
+          echo "::warning::.claude/harness.config.json not found. Copy .claude/harness.config.example.json and fill in the required fields (see docs/agent-harness/POLICY.md)."
+      - name: Reviewing and exploring subagents must be read-only
+        run: |
+          node -e '
+            const fs = require("fs");
+            const names = ["reviewer", "explorer", "verifier-spec", "verifier-test", "verifier-security"];
+            let failed = false;
+            for (const n of names) {
+              const p = `.claude/agents/${n}.md`;
+              if (!fs.existsSync(p)) continue;
+              const fm = fs.readFileSync(p, "utf8").split("---")[1];
+              const tools = (/^tools:\s*(.*)$/m.exec(fm) || [])[1] || "";
+              const bad = tools.split(",").map((t) => t.trim()).filter((t) => ["Write", "Edit", "NotebookEdit", "MultiEdit"].includes(t));
+              if (bad.length) { console.error(`${p} grants write tools: ${bad.join(",")}`); failed = true; }
+              else console.log(`${n}: ${tools}`);
+            }
+            if (failed) process.exit(1);'
+      - name: Subagent model tiers come from harness.config.json only
+        run: |
+          node -e '
+            const fs = require("fs");
+            let failed = false;
+            for (const f of fs.readdirSync(".claude/agents")) {
+              const fm = fs.readFileSync(`.claude/agents/${f}`, "utf8").split("---")[1] || "";
+              if (/^model:/m.test(fm)) { console.error(`${f} pins a model in frontmatter; the tier belongs in harness.config.json agents.*`); failed = true; }
+            }
+            if (failed) process.exit(1);
+            console.log("no agent pins a model");'
+      - name: No customer/internal profile switches anywhere
+        run: |
+          ! grep -rniE --exclude=ci.yml '"(profile|mode|customer|internal|tier)":|isCustomer|isInternal|PROFILE=' \
+              .claude CLAUDE.md docs/agent-harness scripts tests evals .github/workflows 2>/dev/null \
+            || (echo "::error::found a profile/customer switch; the harness must not branch on project type" && exit 1)
+
+  project-checks:
+    name: Project checks (format / lint / typecheck / test)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Skip until harness.config.json exists
+        if: hashFiles('.claude/harness.config.json') == ''
+        run: |
+          echo "::warning::project checks skipped - .claude/harness.config.json not found"
+      - name: Install Python tooling when commands reference ruff / pytest / uv
+        if: hashFiles('.claude/harness.config.json') != ''
+        run: |
+          if grep -qE '"(format|lint|typecheck|test)":\s*"[^"]*\b(ruff|pytest|uv|mypy|pyright)\b' .claude/harness.config.json; then
+            python3 -m pip install --quiet --upgrade pip
+            python3 -m pip install --quiet ruff pytest uv mypy pyright 2>/dev/null || true
+            [ -f requirements.txt ] && python3 -m pip install --quiet -r requirements.txt || true
+            [ -f pyproject.toml ] && python3 -m pip install --quiet -e . 2>/dev/null || true
+          fi
+          if [ -f package-lock.json ]; then npm ci; elif [ -f package.json ]; then npm install; fi
+      - name: format (must not change files)
+        if: hashFiles('.claude/harness.config.json') != ''
+        run: |
+          cmd=$(node -p 'JSON.parse(require("fs").readFileSync(".claude/harness.config.json","utf8")).commands.format.replaceAll("{file}", ".")')
+          if [ -z "$cmd" ]; then echo "::warning::commands.format is empty"; exit 0; fi
+          bash -lc "$cmd" && git diff --exit-code || (echo "::error::format produced changes; run the format command locally" && exit 1)
+      - name: lint
+        if: hashFiles('.claude/harness.config.json') != ''
+        run: |
+          cmd=$(node -p 'JSON.parse(require("fs").readFileSync(".claude/harness.config.json","utf8")).commands.lint.replaceAll("{file}", ".")')
+          if [ -z "$cmd" ]; then echo "::warning::commands.lint is empty"; exit 0; fi
+          bash -lc "$cmd"
+      - name: typecheck
+        if: hashFiles('.claude/harness.config.json') != ''
+        run: |
+          cmd=$(node -p 'JSON.parse(require("fs").readFileSync(".claude/harness.config.json","utf8")).commands.typecheck.replaceAll("{file}", ".")')
+          if [ -z "$cmd" ]; then echo "::warning::commands.typecheck is empty"; exit 0; fi
+          bash -lc "$cmd"
+      - name: test
+        if: hashFiles('.claude/harness.config.json') != ''
+        run: |
+          cmd=$(node -p 'JSON.parse(require("fs").readFileSync(".claude/harness.config.json","utf8")).commands.test')
+          bash -lc "$cmd"
+
+  eval:
+    name: Eval (instruction files changed)
+    runs-on: ubuntu-latest
+    needs: harness
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Detect instruction-file changes
+        id: changed
+        run: |
+          files=$(git diff --name-only "origin/${{ github.base_ref }}...HEAD")
+          echo "$files"
+          if echo "$files" | grep -qE '^(CLAUDE\.md|\.claude/|evals/|\.mcp\.json|docs/agent-harness/)'; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"; echo "no instruction files changed; eval skipped"
+          fi
+      - uses: actions/setup-node@v4
+        if: steps.changed.outputs.run == 'true'
+        with:
+          node-version: 24
+      - name: Install Claude Code
+        if: steps.changed.outputs.run == 'true'
+        # npm >= 11 blocks install scripts by default; the CLI needs its postinstall step.
+        run: |
+          npm install -g --allow-scripts=@anthropic-ai/claude-code @anthropic-ai/claude-code
+          claude --version
+      - name: Require the Claude token
+        if: steps.changed.outputs.run == 'true'
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+        run: |
+          if [ -z "$CLAUDE_CODE_OAUTH_TOKEN" ]; then
+            echo "::error::secrets.CLAUDE_CODE_OAUTH_TOKEN is empty. Evals need it (see README.md > Authentication)."; exit 1
+          fi
+      - name: Run promptfoo
+        if: steps.changed.outputs.run == 'true'
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+        run: bash evals/run.sh
+      - name: Upload eval results and judge log (auditable)
+        if: always() && steps.changed.outputs.run == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-results
+          path: evals/output/
+          if-no-files-found: ignore
+
+  notify-failure:
+    name: Slack ci.failed
+    if: failure()
+    needs: [harness, project-checks, eval]
+    permissions:
+      contents: read
+      issues: write
+    uses: ./.github/workflows/notify-slack.yml
+    secrets: inherit
+    with:
+      event: ${{ needs.eval.result == 'failure' && 'eval.failed' || 'ci.failed' }}
+      payload: |
+        {"repo":"${{ github.repository }}","number":${{ github.event.pull_request.number }},
+         "title":${{ toJSON(github.event.pull_request.title) }},"url":"${{ github.event.pull_request.html_url }}",
+         "job":"${{ needs.harness.result == 'failure' && 'harness' || needs.project-checks.result == 'failure' && 'project-checks' || 'eval' }}",
+         "runUrl":"${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}","actor":"${{ github.actor }}"}

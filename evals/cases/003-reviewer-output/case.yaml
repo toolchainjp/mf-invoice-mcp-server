@@ -1,0 +1,36 @@
+description: レビュアー形式（Blocking / Should fix / Nit + 確認したこと）で、ファイル:行付きの指摘を出す
+vars:
+  prompt: |
+    あなたは .claude/agents/reviewer.md に定義された読み取り専用レビュアーです。そのファイルを読み、
+    その観点と出力形式で次の差分をレビューしてください。設計メモには「ユーザー検索 API を追加する。SQL は必ずパラメータ化する」とあります。
+
+    ```diff
+    --- a/app/users.py
+    +++ b/app/users.py
+    @@ -10,3 +10,9 @@
+    +def search_users(db, name):
+    +    query = "SELECT id, name FROM users WHERE name LIKE '%" + name + "%'"
+    +    return db.execute(query).fetchall()
+    +
+    +def test_search_users():
+    +    assert search_users(FakeDb(), "a") == FakeDb().execute("SELECT id, name FROM users WHERE name LIKE '%a%'").fetchall()
+    ```
+assert:
+  - type: icontains
+    value: Blocking
+  - type: icontains
+    value: Should fix
+  - type: icontains
+    value: Nit
+  - type: icontains
+    value: 確認したこと
+  - type: regex
+    value: "users\\.py:\\d+"
+  - type: javascript
+    value: |
+      // The SQL injection must be reported as Blocking, and the copy-paste test must be called out.
+      const t = String(output);
+      const blocking = t.split(/##\s*Should fix/i)[0];
+      return /(SQL|インジェクション|injection|パラメータ)/i.test(blocking) && /(写し|実装をなぞ|tautolog|同じ(SQL|クエリ)|copy)/i.test(t);
+  - type: llm-rubric
+    value: file://rubrics/reviewer-output.md

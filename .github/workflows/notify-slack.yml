@@ -1,0 +1,56 @@
+name: Notify Slack
+
+# Reusable workflow: one-way Slack notification for a harness event.
+# Called from ci.yml / claude.yml / claude-review.yml, and from a project's own
+# deploy workflow for "deploy.done" (see docs/agent-harness/POLICY.md).
+# Never fails the caller: every step is continue-on-error.
+
+on:
+  workflow_call:
+    inputs:
+      event:
+        description: plan.ready | escalation | pr.opened | verify.report | blocked | ci.failed | eval.failed | deploy.done
+        required: true
+        type: string
+      payload:
+        description: JSON object (see scripts/notify/README.md)
+        required: false
+        type: string
+        default: "{}"
+      thread_key:
+        description: owner/repo#number to thread under (defaults to payload.repo#payload.number)
+        required: false
+        type: string
+        default: ""
+
+# A called workflow may not request more than its caller grants. Hidden thread
+# comments on Issues *and* PRs go through the Issues API, so issues: write is enough.
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        continue-on-error: true
+      - uses: actions/setup-node@v4
+        continue-on-error: true
+        with:
+          node-version: 24
+      - name: Resolve the Slack token secret name from harness.config.json
+        id: cfg
+        continue-on-error: true
+        run: |
+          name=$(node -p 'try{JSON.parse(require("fs").readFileSync(".claude/harness.config.json","utf8")).slack.tokenSecretName||"SLACK_BOT_TOKEN"}catch{"SLACK_BOT_TOKEN"}')
+          echo "tokenSecretName=$name" >> "$GITHUB_OUTPUT"
+      - name: Send
+        continue-on-error: true
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets[steps.cfg.outputs.tokenSecretName] }}
+          GITHUB_TOKEN: ${{ github.token }}
+          EVENT: ${{ inputs.event }}
+          PAYLOAD: ${{ inputs.payload }}
+          THREAD_KEY: ${{ inputs.thread_key }}
+        run: node scripts/notify/send.mjs --event "$EVENT" --payload "$PAYLOAD" --thread-key "$THREAD_KEY"

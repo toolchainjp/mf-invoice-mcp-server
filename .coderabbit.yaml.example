@@ -1,0 +1,42 @@
+# CodeRabbit configuration template. Copy to `.coderabbit.yaml` to enable.
+# See docs/agent-harness/EXTERNAL_REVIEW.md for what this tool is and is not responsible for.
+#
+# The point of this file is to keep CodeRabbit on "what changed" and off the ground the
+# harness's own verifiers already cover, so a pull request does not collect two sets of
+# comments saying the same thing.
+language: ja-JP
+
+reviews:
+  profile: chill # fewer, higher-confidence comments; the verifiers cover correctness depth
+  request_changes_workflow: false # blocking is decided by the harness verifiers and by people
+  high_level_summary: true # this is the half we want: what changed, across files
+  poem: false
+  review_status: false
+  collapse_walkthrough: true # the harness writes its own reading order at the top of the body
+
+  path_filters:
+    # Generated, vendored or harness-owned paths: nothing useful to say about them.
+    - "!**/*.lock"
+    - "!**/dist/**"
+    - "!**/build/**"
+    - "!**/node_modules/**"
+    - "!.harness/**"
+    - "!evals/output/**"
+
+  path_instructions:
+    - path: "**/*"
+      instructions: >-
+        Describe what the change does and flag general defects and language idioms.
+        Do NOT report on: whether the change matches the design memo in docs/plans/,
+        whether tests merely mirror the implementation, or secrets/permissions/input
+        validation. Dedicated read-only reviewers already cover those and duplicate
+        comments make the pull request harder to read.
+    - path: "docs/**"
+      instructions: Only flag factual errors and broken links. Do not restyle prose.
+
+  auto_review:
+    enabled: true
+    drafts: false
+
+chat:
+  auto_reply: true

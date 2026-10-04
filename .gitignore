@@ -1,0 +1,18 @@
+# Claude Code per-user settings (never shared)
+.claude/settings.local.json
+
+# Local environment / secrets
+.env
+.env.*
+!.env.example
+
+# Node
+node_modules/
+
+# Eval outputs (uploaded as CI artifacts, not committed)
+evals/output/
+
+# OS
+.DS_Store
+
+.harness/

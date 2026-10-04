@@ -1,0 +1,180 @@
+name: Claude Review
+
+# Independent, read-only review of every pull request, split by perspective.
+#
+# Three jobs run in parallel, one per verifier (.claude/agents/verifier-*.md). Each sees
+# only the design memo and the diff — never the conversation that produced the code — and
+# returns structured findings. A fourth job merges them with scripts/review/merge-findings.mjs,
+# which orders and de-duplicates by fixed rules, so no model decides what the report says.
+#
+# Splitting into jobs rather than asking one session to spawn three subagents means a
+# perspective that fails is visible as a failed job and the other two still report.
+
+on:
+  pull_request:
+    types: [opened, synchronize, ready_for_review, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+  id-token: write
+
+concurrency:
+  group: claude-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  config:
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    outputs:
+      maxTurns: ${{ steps.read.outputs.maxTurns }}
+      maxMinutes: ${{ steps.read.outputs.maxMinutes }}
+      verifierModel: ${{ steps.read.outputs.verifierModel }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Read budget and model tiers from harness.config.json (falls back to the example)
+        id: read
+        env:
+          HARNESS_MAX_TURNS: ${{ vars.HARNESS_MAX_TURNS }}
+          HARNESS_MAX_MINUTES: ${{ vars.HARNESS_MAX_MINUTES }}
+        run: |
+          node -e '
+            const fs = require("fs");
+            const f = fs.existsSync(".claude/harness.config.json") ? ".claude/harness.config.json" : ".claude/harness.config.example.json";
+            const c = JSON.parse(fs.readFileSync(f, "utf8"));
+            const out = [
+              `maxTurns=${process.env.HARNESS_MAX_TURNS || c.budget.maxTurns}`,
+              `maxMinutes=${process.env.HARNESS_MAX_MINUTES || c.budget.maxMinutes}`,
+              `verifierModel=${c.agents.verifier.model}`,
+            ].join("\n");
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, out + "\n");'
+
+  verify:
+    needs: config
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ fromJSON(needs.config.outputs.maxMinutes) }}
+    strategy:
+      fail-fast: false # one perspective failing must not hide the other two
+      matrix:
+        perspective: [spec, test, security]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run the read-only verifier
+        id: claude
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # 未確認: --agent が claude-code-action (-p) でプロジェクトの .claude/agents/ を
+          # 解決するかは実機で要確認。解決されない場合は prompt 内の指示だけが効く。
+          claude_args: |
+            --agent verifier-${{ matrix.perspective }}
+            --model ${{ needs.config.outputs.verifierModel }}
+            --max-turns ${{ needs.config.outputs.maxTurns }}
+            --json-schema {"type":"object","required":["perspective","blocking","shouldFix","nit"],"properties":{"perspective":{"type":"string"},"blocking":{"type":"array","items":{"type":"object","required":["file","line","issue"],"properties":{"file":{"type":"string"},"line":{"type":"integer"},"issue":{"type":"string"}}}},"shouldFix":{"type":"array","items":{"type":"object","required":["file","line","issue"],"properties":{"file":{"type":"string"},"line":{"type":"integer"},"issue":{"type":"string"}}}},"nit":{"type":"array","items":{"type":"object","required":["file","line","issue"],"properties":{"file":{"type":"string"},"line":{"type":"integer"},"issue":{"type":"string"}}}},"checked":{"type":"array","items":{"type":"string"}},"notChecked":{"type":"array","items":{"type":"string"}}}}
+          prompt: |
+            You are the read-only `verifier-${{ matrix.perspective }}` subagent. Your only inputs are the design memo and the diff.
+            Follow .claude/agents/verifier-${{ matrix.perspective }}.md: review ONLY that perspective, and do not summarise what the change does.
+            PR: ${{ github.event.pull_request.html_url }}
+            Base branch: origin/${{ github.event.pull_request.base.ref }}
+            1. Find the design memo: look for a `docs/plans/*.md` path in the PR body below; if none, use the newest file in docs/plans/ that mentions this change; if none exists, say so in `notChecked`.
+            2. Read the diff with: git diff origin/${{ github.event.pull_request.base.ref }}...HEAD
+            3. Return the structured output. Put what you actually verified in `checked` even when you found nothing.
+            PR body:
+            ${{ github.event.pull_request.body }}
+
+      - name: Save the findings
+        if: always()
+        env:
+          STRUCTURED: ${{ steps.claude.outputs.structured_output }}
+        run: |
+          mkdir -p findings
+          printf '%s' "$STRUCTURED" > "findings/verifier-${{ matrix.perspective }}.json"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: findings-${{ matrix.perspective }}
+          path: findings/
+          if-no-files-found: ignore
+
+  merge:
+    needs: verify
+    if: always() && needs.verify.result != 'skipped'
+    runs-on: ubuntu-latest
+    outputs:
+      blocking: ${{ steps.merge.outputs.blocking }}
+      shouldFix: ${{ steps.merge.outputs.shouldFix }}
+      nit: ${{ steps.merge.outputs.nit }}
+      blockingItems: ${{ steps.merge.outputs.blockingItems }}
+      groups: ${{ steps.groups.outputs.value }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+      - name: Merge the findings deterministically
+        id: merge
+        run: |
+          mkdir -p findings
+          for p in spec test security; do
+            src="artifacts/verifier-$p.json"
+            [ -s "$src" ] && cp "$src" "findings/verifier-$p.json" || : > "findings/verifier-$p.json"
+          done
+          node scripts/review/merge-findings.mjs findings/verifier-spec.json findings/verifier-test.json findings/verifier-security.json --json > merged.json || true
+          node scripts/review/merge-findings.mjs findings/verifier-spec.json findings/verifier-test.json findings/verifier-security.json > merged.md || true
+          node -e '
+            const fs = require("fs");
+            const m = JSON.parse(fs.readFileSync("merged.json", "utf8"));
+            const items = m.findings.filter((f) => f.severity === "blocking").slice(0, 5)
+              .map((f) => `${f.file}:${f.line} — ${f.issues[0].issue}`);
+            fs.appendFileSync(process.env.GITHUB_OUTPUT,
+              `blocking=${m.counts.blocking}\nshouldFix=${m.counts.shouldFix}\nnit=${m.counts.nit}\nblockingItems=${JSON.stringify(items)}\n`);'
+      - name: Compute the walkthrough reading order for the notification
+        id: groups
+        run: |
+          node -e '
+            const { execSync } = require("node:child_process");
+            (async () => {
+              const { classify, parseNumstat } = await import("./scripts/walkthrough/classify.mjs");
+              const out = execSync("git diff --numstat origin/${{ github.event.pull_request.base.ref }}...HEAD", { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+              const groups = classify(parseNumstat(out)).map((g) => ({ label: g.label, files: g.files.length }));
+              require("node:fs").appendFileSync(process.env.GITHUB_OUTPUT, `value=${JSON.stringify(groups)}\n`);
+            })();'
+
+      - name: Post the review as a PR comment
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          {
+            echo "## 🤖 Independent review (read-only verifiers)"
+            echo
+            cat merged.md
+            echo
+            echo "<sub>3 つの verifier は設計メモと差分だけを見ています。マージは scripts/review/merge-findings.mjs による決定的処理で、モデルは介在しません。修正は人の承認後に適用してください。</sub>"
+          } > review.md
+          gh pr comment ${{ github.event.pull_request.number }} --body-file review.md
+
+  notify:
+    needs: merge
+    if: always() && needs.merge.result != 'skipped'
+    permissions:
+      contents: read
+      issues: write
+    uses: ./.github/workflows/notify-slack.yml
+    secrets: inherit
+    with:
+      event: pr.opened
+      payload: |
+        {"repo":"${{ github.repository }}","number":${{ github.event.pull_request.number }},
+         "title":${{ toJSON(github.event.pull_request.title) }},"url":"${{ github.event.pull_request.html_url }}",
+         "actor":"${{ github.event.pull_request.user.login }}",
+         "blocking":${{ needs.merge.outputs.blocking || 0 }},"shouldFix":${{ needs.merge.outputs.shouldFix || 0 }},"nit":${{ needs.merge.outputs.nit || 0 }},
+         "blockingItems":${{ needs.merge.outputs.blockingItems || '[]' }},
+         "groups":${{ needs.merge.outputs.groups || '[]' }}}

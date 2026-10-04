@@ -1,0 +1,354 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "harness.config.schema.json",
+  "title": "Agent harness project configuration",
+  "description": "Project-specific facts used by Claude Code settings, hooks, CI, slash commands and Slack notifications. This file holds facts only; it must not contain profiles, modes or customer/internal switches.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "approvers",
+    "deploy",
+    "budget",
+    "agents",
+    "protectedPaths",
+    "secretPaths",
+    "commands",
+    "mcp",
+    "slack"
+  ],
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "approvers": {
+      "description": "GitHub handles (without @) who approve design memos and pull requests. At least one is required before /plan and /implement will run.",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9-]+$"
+      },
+      "minItems": 1
+    },
+    "deploy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "target",
+        "productionBranch",
+        "productionPatterns"
+      ],
+      "properties": {
+        "target": {
+          "description": "Where production is deployed, e.g. \"cloudflare-workers\", \"vercel\", \"aws-ecs\". Free text; used in docs and notifications.",
+          "type": "string",
+          "minLength": 1
+        },
+        "productionBranch": {
+          "description": "Branch whose merge triggers a production deploy, e.g. \"main\".",
+          "type": "string",
+          "minLength": 1
+        },
+        "productionPatterns": {
+          "description": "Regular expressions (JavaScript syntax) that identify production hosts, URLs or environment names. Any Bash command matching one of these is blocked by the PreToolUse hook.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "budget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "maxTurns",
+        "maxMinutes",
+        "maxParallel",
+        "maxDepth",
+        "bestOfN"
+      ],
+      "properties": {
+        "maxTurns": {
+          "description": "Passed to claude-code-action as --max-turns.",
+          "type": "integer",
+          "minimum": 1
+        },
+        "maxMinutes": {
+          "description": "GitHub Actions timeout-minutes for Claude jobs.",
+          "type": "integer",
+          "minimum": 1
+        },
+        "maxParallel": {
+          "description": "Maximum number of subagents allowed to run at the same time. Enforced by the PreToolUse hook on the Agent tool, which reserves a slot per call and releases it on SubagentStop.",
+          "type": "integer",
+          "minimum": 1
+        },
+        "maxDepth": {
+          "description": "How deep subagent nesting may go. 1 means the main conversation may spawn subagents but those subagents may not spawn their own.",
+          "type": "integer",
+          "minimum": 1
+        },
+        "bestOfN": {
+          "description": "Number of independent attempts to run when Best-of-N triggers (two consecutive test failures, or blocking findings surviving two fix attempts). Never used outside those conditions: there is no setting that turns it on permanently.",
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "protectedPaths": {
+      "description": "Glob patterns (gitignore-like: a pattern without \"/\" matches at any depth) that Claude Code may read but not write. Changes to these paths are made by humans through pull requests. Must include \".mcp.json\".",
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "contains": {
+        "const": ".mcp.json"
+      }
+    },
+    "secretPaths": {
+      "description": "Glob patterns for files that may contain secrets. Claude Code may neither read nor write them (including via cat, sed, redirects).",
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "commands": {
+      "description": "Shell commands run by hooks, CI and /verify. \"{file}\" is replaced with the edited file path when present; otherwise the command runs against the whole project. An empty string means \"not configured\" and the step is skipped with a note.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "format",
+        "lint",
+        "typecheck",
+        "test"
+      ],
+      "properties": {
+        "format": {
+          "type": "string"
+        },
+        "lint": {
+          "type": "string"
+        },
+        "typecheck": {
+          "type": "string"
+        },
+        "test": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "mcp": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "servers",
+        "envRefs"
+      ],
+      "properties": {
+        "servers": {
+          "description": "Names of servers from .mcp.json that are enabled for this project. Must match keys in .mcp.json.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "envRefs": {
+          "description": "Per server: names (not values) of environment variables the server needs.",
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "slack": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "channel",
+        "mentionApprovers",
+        "tokenSecretName",
+        "events"
+      ],
+      "properties": {
+        "channel": {
+          "description": "Slack channel ID (e.g. C0123456789). Empty string disables all notifications.",
+          "type": "string"
+        },
+        "mentionApprovers": {
+          "description": "Mention approvers on events that need a human decision (plan.ready, escalation, pr.opened with blocking findings).",
+          "type": "boolean"
+        },
+        "approverSlackIds": {
+          "description": "Optional map of GitHub handle -> Slack member ID (U…), used for mentions. Handles without an entry are shown as plain text.",
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "tokenSecretName": {
+          "description": "Name of the GitHub Actions secret that holds the Slack bot token. The value is never stored here.",
+          "type": "string",
+          "minLength": 1
+        },
+        "events": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "plan.ready",
+            "escalation",
+            "pr.opened",
+            "verify.report",
+            "blocked",
+            "ci.failed",
+            "eval.failed",
+            "deploy.done"
+          ],
+          "properties": {
+            "plan.ready": {
+              "type": "boolean"
+            },
+            "escalation": {
+              "type": "boolean"
+            },
+            "pr.opened": {
+              "type": "boolean"
+            },
+            "verify.report": {
+              "type": "boolean"
+            },
+            "blocked": {
+              "type": "boolean"
+            },
+            "ci.failed": {
+              "type": "boolean"
+            },
+            "eval.failed": {
+              "type": "boolean"
+            },
+            "deploy.done": {
+              "type": "boolean"
+            }
+          }
+        }
+      }
+    },
+    "agents": {
+      "description": "Model tier per role. The subagent definitions in .claude/agents/ deliberately omit `model`, so this file is the only place a tier is decided; the caller passes it as the Agent tool's `model` parameter and the PreToolUse hook rejects a call that does not match.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "planner",
+        "implementer",
+        "explorer",
+        "verifier"
+      ],
+      "properties": {
+        "planner": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "model",
+            "role"
+          ],
+          "properties": {
+            "model": {
+              "description": "Model tier for the planner role. Must be a value the Agent tool accepts.",
+              "type": "string",
+              "enum": [
+                "opus",
+                "sonnet",
+                "haiku",
+                "fable"
+              ]
+            },
+            "role": {
+              "description": "What this role does. Documentation only; nothing reads it at runtime.",
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "implementer": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "model",
+            "role"
+          ],
+          "properties": {
+            "model": {
+              "description": "Model tier for the implementer role. Must be a value the Agent tool accepts.",
+              "type": "string",
+              "enum": [
+                "opus",
+                "sonnet",
+                "haiku",
+                "fable"
+              ]
+            },
+            "role": {
+              "description": "What this role does. Documentation only; nothing reads it at runtime.",
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "explorer": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "model",
+            "role"
+          ],
+          "properties": {
+            "model": {
+              "description": "Model tier for the explorer role. Must be a value the Agent tool accepts.",
+              "type": "string",
+              "enum": [
+                "opus",
+                "sonnet",
+                "haiku",
+                "fable"
+              ]
+            },
+            "role": {
+              "description": "What this role does. Documentation only; nothing reads it at runtime.",
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "verifier": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "model",
+            "role"
+          ],
+          "properties": {
+            "model": {
+              "description": "Model tier for the verifier role. Must be a value the Agent tool accepts.",
+              "type": "string",
+              "enum": [
+                "opus",
+                "sonnet",
+                "haiku",
+                "fable"
+              ]
+            },
+            "role": {
+              "description": "What this role does. Documentation only; nothing reads it at runtime.",
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      }
+    }
+  }
+}

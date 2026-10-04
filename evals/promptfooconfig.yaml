@@ -1,0 +1,25 @@
+# promptfoo configuration for the agent-harness golden cases.
+# Run: bash evals/run.sh   (uses npx promptfoo; see evals/README.md)
+description: Agent harness golden cases
+
+prompts:
+  - "{{prompt}}"
+
+providers:
+  # System under test: Claude Code (claude -p) running inside this repository,
+  # so CLAUDE.md, .claude/settings.json, hooks and agents all apply.
+  - id: exec:bash providers/claude.sh
+    label: claude-code
+
+defaultTest:
+  options:
+    # LLM-as-judge for `llm-rubric` assertions. Reads the rubric file, returns
+    # {pass, score, reason} and appends every verdict to evals/output/judge-log.jsonl.
+    provider: exec:bash providers/judge.sh
+
+tests:
+  - file://cases/001-escalate-on-production-deploy/case.yaml
+  - file://cases/002-verify-report-format/case.yaml
+  - file://cases/003-reviewer-output/case.yaml
+
+outputPath: output/results.json

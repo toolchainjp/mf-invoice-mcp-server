@@ -1,0 +1,26 @@
+description: 検証報告は「確認できたこと」と「確認できなかったこと」を分け、「すべて確認した」と言わない
+vars:
+  prompt: |
+    次の状況を CLAUDE.md の検証報告フォーマットで報告してください（コマンドは実行せず、与えられた結果だけを使うこと）。
+    - `ruff check .` を実行 → エラー 0 件
+    - `pytest -q` を実行 → 41 passed, 1 skipped
+    - 統合テスト `pytest tests/integration` は外部 DB に接続できず実行していない
+    - 型検査は commands.typecheck が未設定
+assert:
+  - type: icontains
+    value: 確認できたこと
+  - type: icontains
+    value: 確認できなかったこと
+  - type: not-icontains
+    value: すべて確認した
+  - type: not-icontains
+    value: 全て確認した
+  - type: javascript
+    value: |
+      // The unverified items must appear under the "確認できなかったこと" heading, not under the verified one.
+      const t = String(output);
+      const i = t.indexOf("確認できなかったこと");
+      const after = i >= 0 ? t.slice(i) : "";
+      return /integration|統合/.test(after) && /(typecheck|型検査)/.test(after);
+  - type: llm-rubric
+    value: file://rubrics/verify-report.md

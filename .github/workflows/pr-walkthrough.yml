@@ -1,0 +1,105 @@
+name: PR Walkthrough
+
+# Puts a reading order at the top of every pull request body, so a reviewer opens the
+# schema before the callers instead of scrolling a flat file list.
+#
+# The grouping, the ordering and the decision of whether a diagram is warranted are all
+# made by scripts under scripts/walkthrough/ with fixed rules. A model is used for one
+# thing only — drawing the sequence diagram — and only when the diff actually changes
+# how parts talk to each other. That diagram is always labelled 自動生成・要確認 and is
+# an input to verifier-spec, never a substitute for reading the code.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: write
+  id-token: write
+
+concurrency:
+  group: walkthrough-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  walkthrough:
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Save the current PR body
+        env:
+          BODY: ${{ github.event.pull_request.body }}
+        run: printf '%s' "$BODY" > pr-body.md
+
+      - name: Does this change warrant a diagram?
+        id: diagram
+        run: |
+          node scripts/walkthrough/needs-diagram.mjs "origin/${{ github.event.pull_request.base.ref }}" --json > diagram.json
+          cat diagram.json
+          node -e '
+            const fs = require("fs");
+            const d = JSON.parse(fs.readFileSync("diagram.json", "utf8"));
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, `needed=${d.needed}\nreasons=${d.reasons.join(", ")}\n`);'
+
+      - name: Read the verifier model tier
+        id: model
+        if: steps.diagram.outputs.needed == 'true'
+        run: |
+          echo "value=$(node scripts/agents/model-for.mjs verifier)" >> "$GITHUB_OUTPUT"
+
+      - name: Draw the sequence diagram
+        id: draw
+        if: steps.diagram.outputs.needed == 'true'
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          claude_args: |
+            --model ${{ steps.model.outputs.value }}
+            --max-turns 6
+            --disallowedTools Edit,Write,NotebookEdit,WebFetch,WebSearch
+            --json-schema {"type":"object","required":["mermaid"],"properties":{"mermaid":{"type":"string"},"note":{"type":"string"}}}
+          prompt: |
+            Read the diff with: git diff origin/${{ github.event.pull_request.base.ref }}...HEAD
+            It changes how parts of the system talk to each other (${{ steps.diagram.outputs.reasons }}).
+            Return ONE Mermaid `sequenceDiagram` showing the interaction BEFORE and AFTER the change,
+            using two `box` sections or a `Note over` label to separate them. Rules:
+            - participants are components in this repository plus any external service the diff names
+            - at most 12 messages in total; leave out anything the diff does not touch
+            - `mermaid` must contain the diagram body only, with no ``` fences
+            - do not invent components or calls that are not in the diff; if the diff is not clear
+              enough to draw, return an empty `mermaid` string and say why in `note`
+
+      - name: Save the diagram
+        if: steps.diagram.outputs.needed == 'true'
+        env:
+          STRUCTURED: ${{ steps.draw.outputs.structured_output }}
+        run: |
+          node -e '
+            const fs = require("fs");
+            let m = "";
+            try { m = (JSON.parse(process.env.STRUCTURED || "{}").mermaid || "").trim(); } catch {}
+            if (m) fs.writeFileSync("diagram.mmd", m);
+            else console.log("::warning::図は生成されませんでした（モデルが返さなかったか、差分から起こせませんでした）。ウォークスルーは図なしで作ります。");'
+
+      - name: Build and apply the walkthrough
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          args=(--base "origin/${{ github.event.pull_request.base.ref }}" --pr-body-file pr-body.md --repo "${{ github.repository }}" --sha "${{ github.event.pull_request.head.sha }}")
+          if [ -s diagram.mmd ]; then
+            args+=(--diagram-file diagram.mmd --diagram-reasons "${{ steps.diagram.outputs.reasons }}")
+          fi
+          node scripts/walkthrough/build.mjs "${args[@]}" > block.md
+          node scripts/walkthrough/update-pr-body.mjs --repo "${{ github.repository }}" --number "${{ github.event.pull_request.number }}" --block block.md
+
+      - name: Summarise the walkthrough for the review job
+        run: |
+          node scripts/walkthrough/build.mjs --base "origin/${{ github.event.pull_request.base.ref }}" --pr-body-file pr-body.md --repo "${{ github.repository }}" >> "$GITHUB_STEP_SUMMARY"
