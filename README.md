@@ -54,6 +54,7 @@ Claude Desktop など JSON で設定するクライアントの例、Docker で�
 | `MF_READ_ONLY`         | `false`                                        | `true` なら参照系のツールだけを公開する                                     |
 | `MF_EXCLUDE_TOOLS`     | —                                              | 公開しないツール名（カンマ区切り）。存在しない名前を書くと起動しない        |
 | `MF_REDIRECT_URI`      | `http://localhost:8765/callback`               | `auth` の受け口。アプリポータルに登録した値と完全に一致させる               |
+| `MF_AUTH_LISTEN_HOST`  | リダイレクト URI のホスト                      | `auth` が待ち受けるアドレス。Docker で実行するときは `0.0.0.0`              |
 | `MF_SCOPES`            | `mfc/invoice/data.read mfc/invoice/data.write` | `auth` で要求するスコープ。参照だけなら `mfc/invoice/data.read`             |
 | `MF_TIMEOUT_MS`        | `30000`                                        | API 呼び出しのタイムアウト（ミリ秒）                                        |
 | `MF_API_BASE_URL`      | `https://invoice.moneyforward.com/api/v3`      | API のベース URL（テスト用）                                                |

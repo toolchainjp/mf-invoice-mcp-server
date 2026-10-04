@@ -57,7 +57,7 @@ export interface AuthCommandOptions {
   /** 認可を待つ時間（既定 5 分） */
   timeoutMs?: number;
   /** 待ち受けを始めたときに呼ばれる（テスト用） */
-  onAuthorizeUrl?: (authorizeUrl: string, callbackUrl: string) => void;
+  onAuthorizeUrl?: (authorizeUrl: string, callbackUrl: string, listening: AddressInfo) => void;
 }
 
 const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
@@ -176,8 +176,10 @@ export async function runAuthCommand(config: Config, options: AuthCommandOptions
     server.on("error", (err) =>
       finish(new Error(`${config.redirectUri} で待ち受けできません: ${(err as Error).message}`)),
     );
-    server.listen(Number(redirect.port || 80), redirect.hostname.replace(/^\[|\]$/g, ""), () => {
-      const { port } = server.address() as AddressInfo;
+    const listenHost = config.authListenHost ?? redirect.hostname.replace(/^\[|\]$/g, "");
+    server.listen(Number(redirect.port || 80), listenHost, () => {
+      const listening = server.address() as AddressInfo;
+      const { port } = listening;
       const callbackUrl = `http://${redirect.hostname}:${port}${redirect.pathname}`;
       log(
         [
@@ -189,7 +191,7 @@ export async function runAuthCommand(config: Config, options: AuthCommandOptions
           `${callbackUrl} で認可の完了を待っています…`,
         ].join("\n"),
       );
-      options.onAuthorizeUrl?.(authorizeUrl, callbackUrl);
+      options.onAuthorizeUrl?.(authorizeUrl, callbackUrl, listening);
       open(authorizeUrl);
     });
   });

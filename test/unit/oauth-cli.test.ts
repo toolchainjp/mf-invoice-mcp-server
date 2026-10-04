@@ -123,6 +123,39 @@ describe("runAuthCommand", () => {
     expect(store.saved).toHaveLength(0);
   });
 
+  it("MF_AUTH_LISTEN_HOST を指定すると、リダイレクト URI は変えずにそのアドレスで待ち受ける（Docker 用）", async () => {
+    const tokenMock = createFetchMock(() =>
+      jsonResponse({ access_token: "acc", refresh_token: "ref", expires_in: 3600 }),
+    );
+    const dockerConfig = loadConfig({
+      MF_CLIENT_ID: "cid",
+      MF_CLIENT_SECRET: "sec",
+      MF_TOKEN_FILE: "none",
+      MF_TOKEN_URL: "https://auth.example.test/token",
+      MF_REDIRECT_URI: "http://127.0.0.1:0/callback",
+      MF_AUTH_LISTEN_HOST: "0.0.0.0",
+    });
+    let listening: { address: string } | undefined;
+    let resolveUrls!: (v: { authorizeUrl: URL; callbackUrl: string }) => void;
+    const urls = new Promise<{ authorizeUrl: URL; callbackUrl: string }>((r) => (resolveUrls = r));
+    const done = runAuthCommand(dockerConfig, {
+      fetch: tokenMock.fetch,
+      store: memoryStore(),
+      log: () => {},
+      openBrowser: () => {},
+      timeoutMs: 5_000,
+      onAuthorizeUrl: (authorizeUrl, callbackUrl, address) => {
+        listening = address;
+        resolveUrls({ authorizeUrl: new URL(authorizeUrl), callbackUrl });
+      },
+    });
+    const { authorizeUrl, callbackUrl } = await urls;
+    expect(listening?.address).toBe("0.0.0.0");
+    expect(authorizeUrl.searchParams.get("redirect_uri")).toBe("http://127.0.0.1:0/callback");
+    await fetch(`${callbackUrl}?code=c&state=${authorizeUrl.searchParams.get("state")}`);
+    expect((await done).refresh_token).toBe("ref");
+  });
+
   it("クライアント ID / シークレットが無ければ設定エラー", async () => {
     await expect(
       runAuthCommand(loadConfig({ MF_TOKEN_FILE: "none" }), { store: memoryStore(), openBrowser: () => {} }),

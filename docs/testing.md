@@ -58,9 +58,31 @@ docker compose run --rm dev npm run check
 必要な環境変数: `MF_CLIENT_ID` + `MF_CLIENT_SECRET` + `MF_REFRESH_TOKEN`（またはトークンファイル）、もしくは `MF_ACCESS_TOKEN`。
 `.env` に書いておくと、`dev` コンテナが自動で読み込みます（`.env` はコミットされません）。
 
-```bash
-docker compose run --rm dev npm run test:e2e:live
-```
+### Docker だけで準備する手順
+
+1. アプリポータルでリダイレクト URI `http://localhost:8765/callback` を登録します。
+2. リポジトリ直下に `.env` を作ります。トークンファイルはコンテナを終了すると消えないよう、リポジトリ直下（`.env.` で始まる名前は
+   コミットされず、Claude Code からも読めません）に置きます。
+
+   ```
+   MF_CLIENT_ID=<クライアントID>
+   MF_CLIENT_SECRET=<クライアントシークレット>
+   MF_SCOPES=mfc/invoice/data.read
+   MF_TOKEN_FILE=/app/.env.token.json
+   ```
+
+3. コンテナで `auth` を実行し、表示された URL をホストのブラウザで開いて許可します。`MF_AUTH_LISTEN_HOST=0.0.0.0` と
+   ポートの公開で、ホストのブラウザからのリダイレクトがコンテナに届きます。
+
+   ```bash
+   docker compose run --rm -p 8765:8765 -e MF_AUTH_LISTEN_HOST=0.0.0.0 dev sh -c "npm run build && node dist/index.js auth --no-browser"
+   ```
+
+4. ライブ E2E を実行します。
+
+   ```bash
+   docker compose run --rm dev npm run test:e2e:live
+   ```
 
 認証情報が無い場合は、何を設定すべきかを示して失敗します。
 

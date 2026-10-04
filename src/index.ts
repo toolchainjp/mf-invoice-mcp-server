@@ -29,6 +29,7 @@ const HELP = `${SERVER_NAME} v${SERVER_VERSION}
   MF_TOKEN_FILE                       トークンの保存先（既定 ~/.config/mf-invoice-mcp-server/token.json、none で保存しない）
   MF_READ_ONLY=true                   参照系のツールだけを公開する
   MF_EXCLUDE_TOOLS                    公開しないツール名（カンマ区切り）
+  MF_AUTH_LISTEN_HOST                 auth が待ち受けるアドレス（Docker で実行するときは 0.0.0.0）
 
 詳しくは https://github.com/toolchainjp/mf-invoice-mcp-server#readme を参照してください。
 `;

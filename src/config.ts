@@ -29,6 +29,11 @@ export interface Config {
   authorizeUrl: string;
   /** auth コマンドの受け口。アプリポータルに登録したリダイレクト URI と完全に一致させる */
   redirectUri: string;
+  /**
+   * auth コマンドが待ち受けるアドレス。省略時はリダイレクト URI のホスト。
+   * Docker では 0.0.0.0 にしてポートを公開すると、ホストのブラウザからのリダイレクトを受け取れる
+   */
+  authListenHost: string | undefined;
   /** auth コマンドで要求するスコープ（空白区切り） */
   scopes: string;
   /** true なら参照系のツールだけを公開する */
@@ -115,6 +120,7 @@ export function loadConfig(env: Env = process.env, options: { homedir?: string }
     tokenUrl: readUrl(env, "MF_TOKEN_URL", DEFAULT_TOKEN_URL),
     authorizeUrl: readUrl(env, "MF_AUTHORIZE_URL", DEFAULT_AUTHORIZE_URL),
     redirectUri: readUrl(env, "MF_REDIRECT_URI", DEFAULT_REDIRECT_URI, { stripSlash: false }),
+    authListenHost: read(env, "MF_AUTH_LISTEN_HOST"),
     scopes: read(env, "MF_SCOPES") ?? DEFAULT_SCOPES,
     readOnly: readBoolean(env, "MF_READ_ONLY"),
     excludeTools: readList(env, "MF_EXCLUDE_TOOLS"),

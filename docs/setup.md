@@ -33,6 +33,16 @@ MF_CLIENT_ID=<クライアントID> MF_CLIENT_SECRET=<クライアントシー�
 
 参照だけで使う場合は `MF_SCOPES=mfc/invoice/data.read` を付けて実行すると、書き込みの権限を持たないトークンになります。
 
+### Docker で `auth` を実行する
+
+コンテナ内で `localhost` を待ち受けても、ホストのブラウザからのリダイレクトは届きません。`MF_AUTH_LISTEN_HOST=0.0.0.0` で
+待ち受けアドレスだけを変え、ポートを公開します（リダイレクト URI は `http://localhost:8765/callback` のまま）。
+`MF_TOKEN_FILE` はボリュームでホストと共有している場所にしてください。
+
+```bash
+docker run -it --rm -p 8765:8765 -e MF_CLIENT_ID -e MF_CLIENT_SECRET -e MF_AUTH_LISTEN_HOST=0.0.0.0 -e MF_TOKEN_FILE=/tokens/token.json -v <ホームディレクトリ>/.config/mf-invoice-mcp-server:/tokens mf-invoice-mcp-server:latest auth --no-browser
+```
+
 ### トークンの更新について
 
 - アクセストークンの有効期限は 1 時間です。サーバーはリフレッシュトークンで自動的に取り直します（期限 5 分前から）。
