@@ -1,5 +1,5 @@
 {
-  "$schema": "../../.claude/harness.config.schema.json",
+  "$schema": "./harness.config.schema.json",
   "approvers": ["KosukeFujimoto"],
   "deploy": {
     "target": "npm（@toolchainjp/mf-invoice-mcp-server）。main のコミットに v*.*.* タグを push すると .github/workflows/release.yml が発行する",
