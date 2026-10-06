@@ -100,46 +100,14 @@ npm への発行手順は [docs/release.md](docs/release.md) を参照してく�
 
 ## ドキュメント
 
-| ファイル                                                                                         | 内容                                                 |
-| ------------------------------------------------------------------------------------------------ | ---------------------------------------------------- |
-| [docs/setup.md](docs/setup.md)                                                                   | アプリの作成、認可、MCP クライアントへの登録         |
-| [docs/tools.md](docs/tools.md)                                                                   | ツール一覧と引数（自動生成）                         |
-| [docs/testing.md](docs/testing.md)                                                               | テスト戦略と実行方法                                 |
-| [docs/architecture.md](docs/architecture.md)                                                     | 内部構成と処理の流れ                                 |
-| [docs/release.md](docs/release.md)                                                               | リリースタグによる npm 発行                          |
-| [docs/plans/2026-10-04-mf-invoice-mcp-server.md](docs/plans/2026-10-04-mf-invoice-mcp-server.md) | 初回実装の設計メモ                                   |
-| [docs/agent-harness/GUIDE.ja.md](docs/agent-harness/GUIDE.ja.md)                                 | エージェント運用ハーネスの使い方（テンプレート由来） |
-
-## 開発フローとテンプレート
-
-このリポジトリは [`toolchainjp/template`](https://github.com/toolchainjp/template) から作成しています。
-
-- ブランチ: `main`（常にリリース可能・PR のみ）／`development`（統合ブランチ）／`feature/*` `fix/*`（作業ブランチ）。PR は `development` 向けに作ります。
-- リリース: `development` → `main` の PR をマージし、`main` に `v*.*.*` タグを push すると npm に発行されます（[docs/release.md](docs/release.md)）。
-- Claude Code での作業ルールは [CLAUDE.md](CLAUDE.md)、運用ポリシーは [docs/agent-harness/POLICY.md](docs/agent-harness/POLICY.md) にあります。
-- `@claude` を Issue / PR で使うには、リポジトリに `CLAUDE_CODE_OAUTH_TOKEN` シークレットの登録が必要です（`scripts/bootstrap-secrets.sh`）。
-
-### 初回セットアップで人が行うこと
-
-`.github/workflows/` と `.claude/` は Claude Code から編集できない保護パスのため、用意した案を手でコピーします。
-
-1. **発行ワークフローの配置**:
-
-   ```bash
-   cp docs/release/release.yml .github/workflows/release.yml
-   ```
-
-2. **ハーネス設定の配置**（CI の format / lint / typecheck / test はこのファイルがあるときだけ動きます）:
-
-   ```bash
-   cp docs/agent-harness/harness.config.proposed.json .claude/harness.config.json
-   ```
-
-   コピー後、`$schema` を `"./harness.config.schema.json"` に書き換えてください。
-
-3. **GitHub リポジトリの作成と push**（リモートは未設定です）。`main` と `development` の両方を push し、ブランチ保護を設定します。
-4. **npm の準備**: [docs/release.md](docs/release.md) の「初回だけ行うこと」（npm 組織、Trusted Publishing または `NPM_TOKEN`）。
-5. **テンプレートの hook は端末の `node` を使います**。Node.js を入れない運用ではローカルの hook は動作しません（CI では動作します）。
+| ファイル                                                                                         | 内容                                         |
+| ------------------------------------------------------------------------------------------------ | -------------------------------------------- |
+| [docs/setup.md](docs/setup.md)                                                                   | アプリの作成、認可、MCP クライアントへの登録 |
+| [docs/tools.md](docs/tools.md)                                                                   | ツール一覧と引数（自動生成）                 |
+| [docs/testing.md](docs/testing.md)                                                               | テスト戦略と実行方法                         |
+| [docs/architecture.md](docs/architecture.md)                                                     | 内部構成と処理の流れ                         |
+| [docs/release.md](docs/release.md)                                                               | リリースタグによる npm 発行                  |
+| [docs/plans/2026-10-04-mf-invoice-mcp-server.md](docs/plans/2026-10-04-mf-invoice-mcp-server.md) | 初回実装の設計メモ                           |
 
 ## 免責事項
 
