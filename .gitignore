@@ -16,3 +16,7 @@ evals/output/
 .DS_Store
 
 .harness/
+
+# Build / test outputs
+dist/
+coverage/

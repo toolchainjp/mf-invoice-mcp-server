@@ -1,0 +1,136 @@
+# 配置先: .github/workflows/release.yml
+#   cp docs/release/release.yml .github/workflows/release.yml
+# （.github/workflows/ は Claude Code から編集できない保護パスのため、人がコピーしてコミットする。docs/release.md 参照）
+name: Release
+
+# リリースタグ（v1.2.3 / v1.2.3-rc.1 など）を push すると npm にパッケージを発行する。
+#   1. タグと package.json の version が一致し、タグのコミットが main に含まれ、同じ版が未発行であることを確認
+#   2. format / lint / typecheck / unit / E2E（npm run check）
+#   3. npm publish（provenance 付き。プレリリース版は dist-tag "next"）
+#   4. GitHub Release を作成（既にあれば作らない）
+#   5. Slack に deploy.done を通知（失敗してもワークフローは失敗させない）
+#
+# npm の認証は次のどちらか（docs/release.md）:
+#   - Trusted Publishing（推奨）: npmjs.com のパッケージ設定でこのリポジトリ / release.yml / Environment npm を登録する。シークレット不要
+#   - トークン: リポジトリシークレット NPM_TOKEN
+# GitHub の画面でタグ付きの Release を作成した場合も、タグの push としてこのワークフローが動く。
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Publish to npm
+    runs-on: ubuntu-latest
+    # Settings → Environments → npm で承認者を設定すると、発行前に人の承認を挟める
+    environment: npm
+    permissions:
+      contents: write # GitHub Release の作成
+      id-token: write # npm provenance / Trusted Publishing（OIDC）
+    outputs:
+      name: ${{ steps.meta.outputs.name }}
+      version: ${{ steps.meta.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+
+      - name: Read package metadata
+        id: meta
+        run: |
+          name=$(node -p 'require("./package.json").name')
+          version=$(node -p 'require("./package.json").version')
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if [[ "$version" == *-* ]]; then echo "dist_tag=next" >> "$GITHUB_OUTPUT"; else echo "dist_tag=latest" >> "$GITHUB_OUTPUT"; fi
+
+      - name: Tag must match package.json version
+        env:
+          TAG: ${{ github.ref_name }}
+          VERSION: ${{ steps.meta.outputs.version }}
+        run: |
+          if [ "$TAG" != "v$VERSION" ]; then
+            echo "::error::タグ $TAG と package.json の version ($VERSION) が一致しません。version を上げたコミットにタグを付けてください。"
+            exit 1
+          fi
+
+      - name: Tagged commit must be on main
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          git fetch --no-tags origin main
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::タグ $TAG のコミットが main に含まれていません。development → main の PR をマージしてから main のコミットにタグを付けてください。"
+            exit 1
+          fi
+
+      - name: Version must not be published yet
+        env:
+          NAME: ${{ steps.meta.outputs.name }}
+          VERSION: ${{ steps.meta.outputs.version }}
+        run: |
+          if npm view "$NAME@$VERSION" version >/dev/null 2>&1; then
+            echo "::error::$NAME@$VERSION は既に npm に発行されています。版を上げて新しいタグを作成してください。"
+            exit 1
+          fi
+
+      # Trusted Publishing には npm 11.5.1 以上が必要
+      - name: Update npm
+        run: npm install -g npm@^11.5.1
+
+      - run: npm ci
+
+      - name: Check (format / lint / typecheck / unit / E2E)
+        run: npm run check
+
+      - name: Show package contents
+        run: npm pack --dry-run
+
+      - name: Publish
+        env:
+          # Trusted Publishing を使う場合は空のままでよい（OIDC で認証される）
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          DIST_TAG: ${{ steps.meta.outputs.dist_tag }}
+        run: npm publish --provenance --access public --tag "$DIST_TAG"
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG は既にあります"
+          else
+            flags=(--generate-notes --verify-tag --title "$TAG")
+            if [[ "$TAG" == *-* ]]; then flags+=(--prerelease); fi
+            gh release create "$TAG" "${flags[@]}"
+          fi
+
+  notify:
+    name: Slack deploy.done
+    needs: publish
+    permissions:
+      contents: read
+      issues: write
+    uses: ./.github/workflows/notify-slack.yml
+    secrets: inherit
+    with:
+      event: deploy.done
+      payload: |
+        {"repo":"${{ github.repository }}","target":"npm ${{ needs.publish.outputs.name }}@${{ needs.publish.outputs.version }}",
+         "deployUrl":"https://www.npmjs.com/package/${{ needs.publish.outputs.name }}/v/${{ needs.publish.outputs.version }}",
+         "runUrl":"${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}","actor":"${{ github.actor }}"}
