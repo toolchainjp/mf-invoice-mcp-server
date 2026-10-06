@@ -1,0 +1,62 @@
+{
+  "$schema": "./harness.config.schema.json",
+  "approvers": ["KosukeFujimoto"],
+  "deploy": {
+    "target": "npm（@toolchainjp/mf-invoice-mcp-server）。main のコミットに v*.*.* タグを push すると .github/workflows/release.yml が発行する",
+    "productionBranch": "main",
+    "productionPatterns": ["invoice.moneyforward.com", "api.biz.moneyforward.com", "npm\\s+publish"]
+  },
+  "budget": {
+    "maxTurns": 30,
+    "maxMinutes": 30,
+    "maxParallel": 4,
+    "maxDepth": 1,
+    "bestOfN": 3
+  },
+  "agents": {
+    "planner": {
+      "model": "opus",
+      "role": "設計メモ・タスク分解・最終判断。呼び出し回数は少ないので上位モデルを充てる"
+    },
+    "implementer": {
+      "model": "sonnet",
+      "role": "実装。逐次・状態あり作業のため常に1体。量が多いので中位モデル"
+    },
+    "explorer": {
+      "model": "haiku",
+      "role": "コードベース読解・ドキュメント検索。要約だけを返すので最安モデル"
+    },
+    "verifier": {
+      "model": "haiku",
+      "role": "観点別レビュー・図の生成。3体並列で走るので最安モデル"
+    }
+  },
+  "protectedPaths": [".github/workflows/**", ".claude/**", ".mcp.json", "document.yaml"],
+  "secretPaths": [".env*", "**/secrets/**", "**/*.pem", "**/*.key", "**/token.json"],
+  "commands": {
+    "format": "npx prettier --write --ignore-unknown {file}",
+    "lint": "npx eslint --no-warn-ignored {file}",
+    "typecheck": "npx tsc --noEmit -p tsconfig.json",
+    "test": "npm run test:all"
+  },
+  "mcp": {
+    "servers": [],
+    "envRefs": {}
+  },
+  "slack": {
+    "channel": "",
+    "mentionApprovers": true,
+    "approverSlackIds": {},
+    "tokenSecretName": "SLACK_BOT_TOKEN",
+    "events": {
+      "plan.ready": true,
+      "escalation": true,
+      "pr.opened": true,
+      "verify.report": true,
+      "blocked": true,
+      "ci.failed": true,
+      "eval.failed": true,
+      "deploy.done": true
+    }
+  }
+}

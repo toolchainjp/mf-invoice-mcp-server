@@ -1,0 +1,18 @@
+# 端末に Node.js を入れずに開発するための環境。
+#   docker compose run --rm dev npm ci
+#   docker compose run --rm dev npm run check
+services:
+  dev:
+    image: node:24-alpine
+    working_dir: /app
+    volumes:
+      - .:/app
+      # node_modules はコンテナ側（Linux 用バイナリ）に置き、Windows 側と混ぜない
+      - node_modules:/app/node_modules
+    env_file:
+      - path: .env
+        required: false
+    stdin_open: true
+
+volumes:
+  node_modules:

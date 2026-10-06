@@ -32,6 +32,19 @@ jobs:
         with:
           fetch-depth: 1
 
+      # This job only runs when someone asks for @claude, so explain on the thread instead of failing silently.
+      - name: Require the Claude token
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+          NUMBER: ${{ github.event.issue.number || github.event.pull_request.number }}
+        run: |
+          if [ -z "$CLAUDE_CODE_OAUTH_TOKEN" ]; then
+            gh api "repos/${{ github.repository }}/issues/$NUMBER/comments" -f body="@claude は使えません: リポジトリシークレット \`CLAUDE_CODE_OAUTH_TOKEN\` が未登録です（README.md > Authentication）。"
+            echo "::error::secrets.CLAUDE_CODE_OAUTH_TOKEN is not set (see README.md > Authentication)."
+            exit 1
+          fi
+
       - name: Read budget from harness.config.json (falls back to the example)
         id: budget
         run: |
@@ -130,6 +143,16 @@ jobs:
         run: |
           gh issue comment ${{ github.event.issue.number }} --body "設計メモを作成できません: \`.claude/harness.config.json\` がまだありません。\`.claude/harness.config.example.json\` をコピーして必須項目（approvers, deploy.target, deploy.productionBranch, commands.test）を設定してください。手順は docs/agent-harness/POLICY.md。"
           exit 1
+
+      - name: Require the Claude token
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ -z "$CLAUDE_CODE_OAUTH_TOKEN" ]; then
+            gh issue comment ${{ github.event.issue.number }} --body "設計メモを作成できません: リポジトリシークレット \`CLAUDE_CODE_OAUTH_TOKEN\` が未登録です（README.md > Authentication）。"
+            exit 1
+          fi
 
       - name: Write the design memo as a comment (planner)
         id: claude

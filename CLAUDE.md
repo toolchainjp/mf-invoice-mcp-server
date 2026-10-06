@@ -5,11 +5,20 @@
 
 ## 1. プロジェクト基本情報
 
-- **これは何か**: Toolchain のプロジェクト用テンプレート。テンプレート自体にはアプリケーションコードは無く、
+- **これは何か**: マネーフォワード クラウド請求書 API v3 を MCP ツールとして公開する MCP サーバー（stdio）。
+  npm パッケージ `@toolchainjp/mf-invoice-mcp-server` として発行する。`toolchainjp/template` から作成しており、
   「ブランチ運用」「Issue / PR テンプレート」「Claude Code の GitHub Actions 連携」「エージェント運用ハーネス」を同梱する。
-- **スタック**: テンプレート由来のプロジェクトごとに異なる。format / lint / typecheck / test のコマンドは
-  `.claude/harness.config.json` の `commands` に定義されている。コマンドを推測せず、必ずそこを読む。
-  （テンプレートの既定は Python: `ruff format` / `ruff check` / `pytest`。）
+- **スタック**: TypeScript（Node.js 24, ESM）、`@modelcontextprotocol/sdk`、Ajv、Vitest、ESLint、Prettier。
+  format / lint / typecheck / test のコマンドは `.claude/harness.config.json` の `commands` に定義されている。
+  コマンドを推測せず、必ずそこを読む（案は `docs/agent-harness/harness.config.proposed.json`）。
+- **Node.js が端末に無い前提**: `npm` は `docker compose run --rm dev <コマンド>` で実行する（`compose.yaml`）。
+- **仕様書が正**: ツール定義は `document.yaml` から `npm run generate` で生成する。`src/generated/` と `docs/tools.md` は手で編集しない。
+  `document.yaml` は提供元の仕様書なので内容を書き換えない。
+- **外部 API**: 実 API（`invoice.moneyforward.com` / `api.biz.moneyforward.com`）には、人が認証情報を渡して
+  `npm run test:e2e:live`（参照系のみ）を明示的に頼んだときだけ接続する。書き込み系ツール、特に料金が発生しうる
+  郵送依頼（`*_posting`）を実 API に対して実行しない。
+- **リリース**: `npm publish` を手元で実行しない。`main` のコミットに `v*.*.*` タグを push すると `.github/workflows/release.yml` が発行する
+  （手順は `docs/release.md`）。タグの push は人が行う。
 - **ブランチ**: `main`（常にリリース可能、PR 以外で触らない）、`development`（統合ブランチ）、`feature/*` `fix/*`（作業ブランチ）。
   PR は `development` 向け。詳細は `README.md`。
 - **ディレクトリ**:
@@ -29,6 +38,13 @@
   | `evals/` | ゴールデンケースと promptfoo 設定 |
   | `scripts/notify/` | Slack 通知（GitHub Actions から実行。Claude Code は使わない） |
   | `tests/harness/` | hook と通知スクリプトのテスト（`bash tests/harness/run.sh`） |
+  | `document.yaml` | クラウド請求書 API v3 の仕様書（`x-mcp` 拡張付き。編集しない） |
+  | `src/` | MCP サーバー本体。構成は `docs/architecture.md` |
+  | `src/generated/` | `document.yaml` からの生成物（`npm run generate`） |
+  | `scripts/generate-operations.ts` | 生成スクリプト |
+  | `test/unit/` `test/e2e/` `test/e2e-live/` | ユニット／模擬 API との E2E／実 API のライブ E2E。方針は `docs/testing.md` |
+  | `docs/setup.md` `docs/tools.md` | 利用者向けのセットアップ手順とツール一覧 |
+  | `docs/release.md` | npm への発行手順と発行ワークフローの説明 |
 
 ## 2. 作業の進め方
 
