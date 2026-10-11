@@ -10,7 +10,7 @@
   「ブランチ運用」「Issue / PR テンプレート」「Claude Code の GitHub Actions 連携」「エージェント運用ハーネス」を同梱する。
 - **スタック**: TypeScript（Node.js 24, ESM）、`@modelcontextprotocol/sdk`、Ajv、Vitest、ESLint、Prettier。
   format / lint / typecheck / test のコマンドは `.claude/harness.config.json` の `commands` に定義されている。
-  コマンドを推測せず、必ずそこを読む（案は `docs/agent-harness/harness.config.proposed.json`）。
+  コマンドを推測せず、必ずそこを読む。
 - **Node.js が端末に無い前提**: `npm` は `docker compose run --rm dev <コマンド>` で実行する（`compose.yaml`）。
 - **仕様書が正**: ツール定義は `document.yaml` から `npm run generate` で生成する。`src/generated/` と `docs/tools.md` は手で編集しない。
   `document.yaml` は提供元の仕様書なので内容を書き換えない。
@@ -19,8 +19,8 @@
   郵送依頼（`*_posting`）を実 API に対して実行しない。
 - **リリース**: `npm publish` を手元で実行しない。`main` のコミットに `v*.*.*` タグを push すると `.github/workflows/release.yml` が発行する
   （手順は `docs/release.md`）。タグの push は人が行う。
-- **ブランチ**: `main`（常にリリース可能、PR 以外で触らない）、`development`（統合ブランチ）、`feature/*` `fix/*`（作業ブランチ）。
-  PR は `development` 向け。詳細は `README.md`。
+- **ブランチ**: `main`（常にリリース可能、PR 以外で触らない）と、`main` から切る作業ブランチ `feature/*` `fix/*` の 2 種類。`development` は使わない。
+  PR は `main` 向け。リリース手順は `docs/release.md`。
 - **ディレクトリ**:
 
   | パス | 内容 |
@@ -56,7 +56,7 @@
 4. **Implement**: `/implement <plan-path>` で設計メモどおりに実装する。設計メモに無い変更が必要になったら止めて聞く。
 5. **Verify**: `/verify` で format / lint / typecheck / test を実行し、§4 の形式で報告する。
 6. **Review**: `/review` で観点別レビュアー 3 体の指摘を受け、修正案を出す（適用は人の承認後）。
-7. **PR**: `development` 向けに PR を作る。PR 本文に §4 の検証報告と §5 の「蓄積先」を書く。
+7. **PR**: `main` 向けに PR を作る。PR 本文に §4 の検証報告と §5 の「蓄積先」を書く。
 
 ### エージェントの使い分け
 
@@ -143,5 +143,5 @@ agent 定義ファイルには書かない。呼び出すときは `node scripts
 ## 7. コミット・PR
 
 - コミットは小さく、メッセージは変更理由を書く
-- PR は `development` 向け。テンプレートの PR 本文（`.github/pull_request_template.md`）に加えて §4 の報告と §5 の蓄積先を書く
+- PR は `main` 向け。テンプレートの PR 本文（`.github/pull_request_template.md`）に加えて §4 の報告と §5 の蓄積先を書く
 - PR 作成（`gh pr create`）と push は権限上「確認あり」。理由を添えて実行する

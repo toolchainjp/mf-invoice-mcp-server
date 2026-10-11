@@ -3,7 +3,7 @@
 // Everything here is derived from the diff by fixed rules — no model is involved — so
 // the block is stable across re-runs and cannot invent a description of the change.
 //
-//   node scripts/walkthrough/build.mjs --base development [--plan docs/plans/x.md]
+//   node scripts/walkthrough/build.mjs --base main [--plan docs/plans/x.md]
 //       [--pr-body-file body.md] [--diagram-file diagram.mmd] [--diagram-reasons "..."]
 import { readFileSync, existsSync } from "node:fs";
 import { execSync } from "node:child_process";
@@ -94,7 +94,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     const i = args.indexOf(`--${name}`);
     return i >= 0 ? args[i + 1] : fallback;
   };
-  const base = opt("base", "development");
+  const base = opt("base", "main");
   const prBody = existsSync(opt("pr-body-file", "")) ? readFileSync(opt("pr-body-file"), "utf8") : "";
   const diagramFile = opt("diagram-file", "");
   const files = parseNumstat(execSync(`git diff --numstat ${base}...HEAD`, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 }));

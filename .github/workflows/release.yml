@@ -74,7 +74,7 @@ jobs:
         run: |
           git fetch --no-tags origin main
           if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
-            echo "::error::タグ $TAG のコミットが main に含まれていません。development → main の PR をマージしてから main のコミットにタグを付けてください。"
+            echo "::error::タグ $TAG のコミットが main に含まれていません。作業ブランチを main にマージしてから、main のコミットにタグを付けてください。"
             exit 1
           fi
 
