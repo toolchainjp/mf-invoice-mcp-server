@@ -8,7 +8,7 @@ allowed-tools: Read, Grep, Glob, Edit, Agent, Bash(node scripts/review/*), Bash(
 # /review — 観点別 3 並列レビュー
 
 - 設計メモ: $0（未指定なら `docs/plans/` の最新ファイルを `Glob` で探す）
-- 比較元ブランチ: $1（未指定なら `development`）
+- 比較元ブランチ: $1（未指定なら `main`）
 
 ## 1. ゲート（決定的）
 
