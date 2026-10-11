@@ -1012,13 +1012,13 @@ export const operations: readonly OperationDef[] = [
           },
           "price": {
             "type": "number",
-            "minimum": "-10_000_000_000",
-            "maximum": "10_000_000_000"
+            "minimum": -10000000000,
+            "maximum": 10000000000
           },
           "quantity": {
             "type": "number",
-            "minimum": "-10_000_000_000",
-            "maximum": "10_000_000_000"
+            "minimum": -10000000000,
+            "maximum": 10000000000
           },
           "is_deduct_withholding_tax": {
             "type": "boolean",
@@ -1140,13 +1140,13 @@ export const operations: readonly OperationDef[] = [
           },
           "price": {
             "type": "number",
-            "minimum": "-10_000_000_000",
-            "maximum": "10_000_000_000"
+            "minimum": -10000000000,
+            "maximum": 10000000000
           },
           "quantity": {
             "type": "number",
-            "minimum": "-10_000_000_000",
-            "maximum": "10_000_000_000"
+            "minimum": -10000000000,
+            "maximum": 10000000000
           },
           "is_deduct_withholding_tax": {
             "type": "boolean",
@@ -1450,13 +1450,13 @@ export const operations: readonly OperationDef[] = [
                 },
                 "price": {
                   "type": "number",
-                  "minimum": "-10_000_000_000",
-                  "maximum": "10_000_000_000"
+                  "minimum": -10000000000,
+                  "maximum": 10000000000
                 },
                 "quantity": {
                   "type": "number",
-                  "minimum": "-10_000_000_000",
-                  "maximum": "10_000_000_000"
+                  "minimum": -10000000000,
+                  "maximum": 10000000000
                 },
                 "is_deduct_withholding_tax": {
                   "type": "boolean",
@@ -1749,13 +1749,13 @@ export const operations: readonly OperationDef[] = [
           },
           "price": {
             "type": "number",
-            "minimum": "-10_000_000_000",
-            "maximum": "10_000_000_000"
+            "minimum": -10000000000,
+            "maximum": 10000000000
           },
           "quantity": {
             "type": "number",
-            "minimum": "-10_000_000_000",
-            "maximum": "10_000_000_000"
+            "minimum": -10000000000,
+            "maximum": 10000000000
           },
           "is_deduct_withholding_tax": {
             "type": "boolean",
@@ -2237,13 +2237,13 @@ export const operations: readonly OperationDef[] = [
                 },
                 "price": {
                   "type": "number",
-                  "minimum": "-10_000_000_000",
-                  "maximum": "10_000_000_000"
+                  "minimum": -10000000000,
+                  "maximum": 10000000000
                 },
                 "quantity": {
                   "type": "number",
-                  "minimum": "-10_000_000_000",
-                  "maximum": "10_000_000_000"
+                  "minimum": -10000000000,
+                  "maximum": 10000000000
                 },
                 "is_deduct_withholding_tax": {
                   "type": "boolean",
@@ -2525,13 +2525,13 @@ export const operations: readonly OperationDef[] = [
           },
           "price": {
             "type": "number",
-            "minimum": "-10_000_000_000",
-            "maximum": "10_000_000_000"
+            "minimum": -10000000000,
+            "maximum": 10000000000
           },
           "quantity": {
             "type": "number",
-            "minimum": "-10_000_000_000",
-            "maximum": "10_000_000_000"
+            "minimum": -10000000000,
+            "maximum": 10000000000
           },
           "is_deduct_withholding_tax": {
             "type": "boolean",

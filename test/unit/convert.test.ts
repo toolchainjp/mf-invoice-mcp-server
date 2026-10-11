@@ -118,6 +118,33 @@ describe("convertSchema", () => {
     expect(convertSchema({ type: "string", pattern: "(?<!bad" }, doc)).toEqual({ type: "string" });
   });
 
+  it("文字列で書かれた数値の制約（'10_000_000_000' など）を数値にする", () => {
+    expect(
+      convertSchema(
+        { type: "number", minimum: "-10_000_000_000", maximum: "10_000_000_000", multipleOf: "0.5" },
+        doc,
+      ),
+    ).toEqual({ type: "number", minimum: -10_000_000_000, maximum: 10_000_000_000, multipleOf: 0.5 });
+    expect(convertSchema({ type: "string", minLength: "1", maxLength: "450" }, doc)).toEqual({
+      type: "string",
+      minLength: 1,
+      maxLength: 450,
+    });
+  });
+
+  it("数値に直せない制約は取り除く（スキーマ全体を無効にしないため）", () => {
+    expect(
+      convertSchema({ type: "number", maximum: "many", minimum: true, exclusiveMaximum: "1e" }, doc),
+    ).toEqual({ type: "number" });
+  });
+
+  it("数値の制約という名前のプロパティは変換しない", () => {
+    expect(convertSchema({ type: "object", properties: { maximum: { type: "string" } } }, doc)).toEqual({
+      type: "object",
+      properties: { maximum: { type: "string" } },
+    });
+  });
+
   it("properties という名前のプロパティや type という名前のプロパティを壊さない", () => {
     expect(
       convertSchema(
@@ -226,6 +253,41 @@ describe("extractOperations（document.yaml）", () => {
     expect(text).not.toContain('"x-');
     expect(text).not.toContain('"example"');
     expect(text).not.toContain('"nullable"');
+  });
+
+  it("数値の制約（minimum / maximum / 長さ / 件数）はすべて数値になっている", () => {
+    const keywords = new Set([
+      "minimum",
+      "maximum",
+      "exclusiveMinimum",
+      "exclusiveMaximum",
+      "multipleOf",
+      "minLength",
+      "maxLength",
+      "minItems",
+      "maxItems",
+    ]);
+    const bad: string[] = [];
+    const walk = (node: unknown, path: string): void => {
+      if (Array.isArray(node)) return node.forEach((n, i) => walk(n, `${path}[${i}]`));
+      if (typeof node !== "object" || node === null) return;
+      for (const [key, value] of Object.entries(node)) {
+        // properties の直下はプロパティ名なので制約として扱わない
+        if (key === "properties" && typeof value === "object" && value !== null) {
+          for (const [prop, sub] of Object.entries(value)) walk(sub, `${path}.properties.${prop}`);
+          continue;
+        }
+        if (keywords.has(key) && typeof value !== "number")
+          bad.push(`${path}.${key}=${JSON.stringify(value)}`);
+        walk(value, `${path}.${key}`);
+      }
+    };
+    for (const op of ops) walk(op, op.toolName);
+    expect(bad).toEqual([]);
+    // 仕様書で文字列だった価格・数量の上限が数値になっている
+    expect(find(ops, "post-items").requestBody?.schema).toMatchObject({
+      properties: { price: { type: "number", minimum: -10_000_000_000, maximum: 10_000_000_000 } },
+    });
   });
 
   it("すべての pattern が JS の正規表現（u フラグ）としてコンパイルできる", () => {

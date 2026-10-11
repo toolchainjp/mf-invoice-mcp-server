@@ -72,6 +72,32 @@ const KIND_BY_METHOD: Record<HttpMethod, OperationKind> = {
 /** スキーマから取り除くキー（JSON Schema として不要・非標準なもの） */
 const DROP_KEYS = new Set(["example", "examples", "nullable", "xml", "externalDocs", "discriminator"]);
 
+/** 値が数値でなければならないキーワード（JSON Schema） */
+const NUMERIC_KEYWORDS = new Set([
+  "minimum",
+  "maximum",
+  "exclusiveMinimum",
+  "exclusiveMaximum",
+  "multipleOf",
+  "minLength",
+  "maxLength",
+  "minItems",
+  "maxItems",
+  "minProperties",
+  "maxProperties",
+]);
+
+/**
+ * 数値のキーワードの値を数値にする。仕様書には `'10_000_000_000'` のように
+ * 区切り文字付きの文字列で書かれた値があり、そのままだと Ajv がスキーマごと拒否する。
+ * 数値に直せない値は undefined（取り除く）。
+ */
+export function toNumericKeyword(value: unknown): number | undefined {
+  if (typeof value === "number") return Number.isFinite(value) ? value : undefined;
+  if (typeof value !== "string" || !/^[+-]?\d[\d_]*(\.\d+)?$/.test(value.trim())) return undefined;
+  return Number(value.trim().replace(/_/g, ""));
+}
+
 export function toToolName(operationId: string): string {
   return operationId
     .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
@@ -163,6 +189,7 @@ function deref<T>(value: unknown, doc: OpenApiDocument): T {
  * - nullable: true（3.0 形式）を type / enum への null 追加で表現
  * - example(s) や x-* 拡張を除去
  * - pattern を JS の正規表現に変換（できなければ除去）
+ * - 文字列で書かれた数値の制約（minimum など）を数値に変換（できなければ除去）
  */
 export function convertSchema(schema: unknown, doc: OpenApiDocument, stack: string[] = []): JsonSchema {
   if (!isObject(schema)) return {};
@@ -206,7 +233,12 @@ export function convertSchema(schema: unknown, doc: OpenApiDocument, stack: stri
         break;
       }
       default:
-        out[key] = value;
+        if (NUMERIC_KEYWORDS.has(key)) {
+          const n = toNumericKeyword(value);
+          if (n !== undefined) out[key] = n;
+        } else {
+          out[key] = value;
+        }
     }
   }
 
