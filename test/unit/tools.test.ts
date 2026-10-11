@@ -136,6 +136,29 @@ describe("ToolRegistry", () => {
     ).toEqual([expect.stringContaining("body.registration_code")]);
   });
 
+  it("全ツールの入力スキーマが Ajv でコンパイルでき、検証で例外を投げない", () => {
+    const registry = new ToolRegistry(operations);
+    for (const tool of registry.list()) {
+      expect(() => registry.validate(tool.name, {}), tool.name).not.toThrow();
+    }
+  });
+
+  it("品目の価格・数量を検証する（上限 100 億）", () => {
+    const registry = new ToolRegistry(operations);
+    expect(
+      registry.validate("post_items", {
+        body: { name: "コンサルティング", price: 50000, excise: "ten_percent" },
+      }),
+    ).toEqual([]);
+    expect(registry.validate("put_items_id", { item_id: "I1", body: { code: "C-001" } })).toEqual([]);
+    expect(
+      registry.validate("post_items", { body: { name: "A", price: 10_000_000_001, excise: "ten_percent" } }),
+    ).toEqual([expect.stringContaining("body.price")]);
+    expect(registry.validate("post_billings_id_items", { billing_id: "B1", body: { quantity: -1 } })).toEqual(
+      [],
+    );
+  });
+
   it("必須・型・未定義の引数・範囲のエラーを日本語で返す", () => {
     const registry = new ToolRegistry(operations);
     expect(registry.validate("get_partners_id", {})).toEqual([
@@ -187,6 +210,30 @@ describe("executeTool", () => {
     const result = await executeTool({ registry, client }, "get_partners_id", {});
     expect(result.isError).toBe(true);
     expect(textOf(result)).toContain("入力が不正です");
+    expect(client.request).not.toHaveBeenCalled();
+  });
+
+  it("入力スキーマが壊れていても例外にせず、API を呼ばずにエラー結果を返す", async () => {
+    const broken: OperationDef = {
+      operationId: "post-broken",
+      toolName: "post_broken",
+      method: "POST",
+      path: "/broken",
+      kind: "create",
+      summary: "broken",
+      mcp: {},
+      tags: [],
+      parameters: [],
+      requestBody: { required: true, schema: { type: "object", properties: { n: { maximum: "x" } } } },
+      scopes: [],
+      responseStatuses: ["201"],
+    };
+    const client = fakeClient(() => ({ status: 201, data: {} }));
+    const result = await executeTool({ registry: new ToolRegistry([broken]), client }, "post_broken", {
+      body: { n: 1 },
+    });
+    expect(result.isError).toBe(true);
+    expect(textOf(result)).toContain("入力スキーマ");
     expect(client.request).not.toHaveBeenCalled();
   });
 

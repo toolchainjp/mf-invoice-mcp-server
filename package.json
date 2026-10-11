@@ -1,6 +1,6 @@
 {
   "name": "@toolchainjp/mf-invoice-mcp-server",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "マネーフォワード クラウド請求書 API v3 を MCP ツールとして公開する MCP サーバー",
   "keywords": [
     "mcp",

@@ -278,7 +278,16 @@ export async function executeTool(ctx: ToolContext, name: string, args: unknown)
     );
   }
 
-  const errors = ctx.registry.validate(name, args);
+  let errors: string[];
+  try {
+    errors = ctx.registry.validate(name, args);
+  } catch (err) {
+    // スキーマ自体を Ajv がコンパイルできない（生成物の不具合）。API は呼ばない
+    return textResult(
+      `ツール ${name} の入力スキーマを検証に使えません（サーバー側の不具合です。報告してください）: ${(err as Error).message}`,
+      true,
+    );
+  }
   if (errors.length) {
     return textResult(`入力が不正です（${name}）:\n${errors.map((e) => `- ${e}`).join("\n")}`, true);
   }
