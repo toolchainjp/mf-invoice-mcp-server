@@ -84,7 +84,7 @@ export function parseNumstat(text) {
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   const { execSync } = await import("node:child_process");
-  const base = process.argv[2] || "development";
+  const base = process.argv[2] || "main";
   const out = execSync(`git diff --numstat ${base}...HEAD`, { encoding: "utf8" });
   console.log(JSON.stringify(classify(parseNumstat(out)), null, 2));
 }

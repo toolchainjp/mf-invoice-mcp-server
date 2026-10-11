@@ -149,7 +149,8 @@ test/unit/  test/e2e/  test/e2e-live/  test/helpers/
 2. 発行先は npmjs.com（公開、`npx` で誰でも起動できる）でよいか。GitHub Packages は利用者側にも認証が要るため候補から外した。
 3. ライセンスは `UNLICENSED` のまま公開してよいか（公開パッケージなら MIT などを推奨）。→ **MIT に決定**（2026-10-05、依頼者の回答）。
 4. GitHub のリポジトリ名を `toolchainjp/mf-invoice-mcp-server` と仮定して `repository` を書いた。provenance はこの URL と実際のリポジトリが一致しないと失敗する。
-5. 発行ワークフローの配置（`.github/workflows/` は Tier 3）。
+5. 発行ワークフローの配置（`.github/workflows/` は Tier 3）。→ 人が `.github/workflows/release.yml` と `.claude/harness.config.json` に配置済み。案のファイルは削除（2026-10-11）。
+6. ブランチ運用 → 2026-10-11 に `development` を廃止し、作業ブランチ → `main` の PR に変更（依頼者の指示）。
 
 ## MCP
 

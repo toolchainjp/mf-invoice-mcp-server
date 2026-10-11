@@ -77,7 +77,7 @@ export function needsDiagram(diff, paths = []) {
 if (import.meta.url === `file://${process.argv[1]}`) {
   const args = process.argv.slice(2);
   const asJson = args.includes("--json");
-  const base = args.find((a) => !a.startsWith("--")) || "development";
+  const base = args.find((a) => !a.startsWith("--")) || "main";
   const diff = execSync(`git diff ${base}...HEAD`, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
   const paths = execSync(`git diff --name-only ${base}...HEAD`, { encoding: "utf8" }).split("\n").filter(Boolean);
   const r = needsDiagram(diff, paths);
